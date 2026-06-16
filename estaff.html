@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KMF PeopleFlow</title>
+    <link rel="stylesheet" href="estaff.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">K</div>
+        <div>
+          <strong>KMF PeopleFlow</strong>
+          <span>KMF Bank · подбор персонала</span>
+        </div>
+      </div>
+      <nav class="nav" aria-label="Основная навигация">
+        <button class="nav-item active" data-view="dashboard">Обзор</button>
+        <button class="nav-item" data-view="vacancies">Вакансии</button>
+        <button class="nav-item" data-view="candidates">Кандидаты</button>
+        <button class="nav-item" data-view="pipeline">Этапы</button>
+        <button class="nav-item" data-view="messages">Коммуникации</button>
+        <button class="nav-item" data-view="reports">Отчеты</button>
+        <button class="nav-item" data-view="settings">Роли</button>
+      </nav>
+      <div class="role-card">
+        <label for="roleSelect">Текущая роль</label>
+        <select id="roleSelect"></select>
+      </div>
+    </aside>
+
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Автоматизация найма</p>
+          <h1 id="viewTitle">Обзор</h1>
+        </div>
+        <div class="top-actions">
+          <button class="ghost" id="resetDemo">Демо-данные</button>
+          <button class="primary" id="quickAddCandidate">+ Кандидат</button>
+        </div>
+      </header>
+
+      <section class="view active" id="dashboardView">
+        <div class="metrics" id="metrics"></div>
+        <div class="split">
+          <section class="panel">
+            <div class="section-head">
+              <h2>Активные вакансии</h2>
+              <button class="ghost" data-view-jump="vacancies">Все</button>
+            </div>
+            <div id="activeVacancies" class="list"></div>
+          </section>
+          <section class="panel">
+            <div class="section-head">
+              <h2>Ближайшие интервью</h2>
+              <button class="ghost" data-view-jump="pipeline">Этапы</button>
+            </div>
+            <div id="upcomingInterviews" class="list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="vacanciesView">
+        <section class="panel">
+          <div class="section-head">
+            <h2>Управление вакансиями</h2>
+            <button class="primary" id="newVacancy">+ Вакансия</button>
+          </div>
+          <div class="toolbar">
+            <input id="vacancySearch" type="search" placeholder="Поиск по названию, отделу, должности" />
+            <select id="vacancyStatusFilter"><option value="">Все статусы</option></select>
+          </div>
+          <div id="vacanciesList" class="grid-list"></div>
+        </section>
+      </section>
+
+      <section class="view" id="candidatesView">
+        <section class="panel">
+          <div class="section-head">
+            <h2>База кандидатов</h2>
+            <button class="primary" id="newCandidate">+ Кандидат</button>
+          </div>
+          <div class="toolbar">
+            <input id="candidateSearch" type="search" placeholder="ФИО, навыки, контакты, теги" />
+            <select id="candidateStageFilter"><option value="">Все этапы</option></select>
+            <input id="resumeImport" type="file" accept=".pdf,.doc,.docx,.txt" />
+          </div>
+          <div id="candidatesList" class="grid-list"></div>
+        </section>
+      </section>
+
+      <section class="view" id="pipelineView">
+        <section class="panel full">
+          <div class="section-head">
+            <h2>Процесс отбора</h2>
+            <button class="ghost" id="addInterview">Запланировать интервью</button>
+          </div>
+          <div id="pipelineBoard" class="pipeline"></div>
+        </section>
+      </section>
+
+      <section class="view" id="messagesView">
+        <section class="panel">
+          <div class="section-head">
+            <h2>Шаблоны и рассылки</h2>
+            <button class="primary" id="sendMessage">Подготовить письмо</button>
+          </div>
+          <div id="messageTemplates" class="grid-list compact"></div>
+        </section>
+      </section>
+
+      <section class="view" id="reportsView">
+        <section class="panel">
+          <div class="section-head">
+            <h2>Отчеты и аналитика</h2>
+            <div class="button-row">
+              <button class="ghost" id="exportExcel">Excel</button>
+              <button class="ghost" id="exportPdf">PDF</button>
+            </div>
+          </div>
+          <div class="metrics" id="reportMetrics"></div>
+          <div class="split">
+            <div class="chart-wrap">
+              <h3>Конверсия по этапам</h3>
+              <div id="stageChart" class="bar-chart"></div>
+            </div>
+            <div class="chart-wrap">
+              <h3>Источники кандидатов</h3>
+              <div id="sourceChart" class="bar-chart"></div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="settingsView">
+        <section class="panel">
+          <div class="section-head">
+            <h2>Роли и права доступа</h2>
+            <button class="primary" id="saveRoles">Сохранить</button>
+          </div>
+          <div id="rolesMatrix" class="roles"></div>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="modal">
+      <form method="dialog" id="modalForm">
+        <div class="modal-head">
+          <h2 id="modalTitle">Форма</h2>
+          <button type="button" class="icon-button modal-cancel" aria-label="Закрыть">x</button>
+        </div>
+        <div id="modalBody" class="form-grid"></div>
+        <menu class="modal-actions">
+          <button type="button" class="ghost modal-cancel">Отмена</button>
+          <button type="submit" id="modalSubmit" value="default" class="primary">Сохранить</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <script src="estaff.js"></script>
+  </body>
+</html>
