@@ -1,0 +1,12 @@
+.DS_Store
+.env
+storage/
+node_modules/
+dist/
+coverage/
+
+# Old blocked artifacts from the first static-prototype write attempt.
+index.html
+styles.css
+app.js
+

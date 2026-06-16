@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kmf-peopleflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kmf_peopleflow
+      POSTGRES_USER: kmf
+      POSTGRES_PASSWORD: kmf_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - kmf_peopleflow_pgdata:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/002-seed.sql:ro
+
+volumes:
+  kmf_peopleflow_pgdata:
+

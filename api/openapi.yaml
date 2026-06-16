@@ -1,0 +1,141 @@
+openapi: 3.0.3
+info:
+  title: KMF PeopleFlow API
+  version: 0.1.0
+  description: Initial REST API contract for the KMF PeopleFlow ATS.
+servers:
+  - url: http://localhost:3000/api
+paths:
+  /vacancies:
+    get:
+      summary: List vacancies
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vacancy list
+    post:
+      summary: Create vacancy
+      responses:
+        "201":
+          description: Vacancy created
+  /vacancies/{id}:
+    get:
+      summary: Get vacancy
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Vacancy details
+    patch:
+      summary: Update vacancy
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Vacancy updated
+  /candidates:
+    get:
+      summary: List candidates
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: skill
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Candidate list
+    post:
+      summary: Create candidate
+      responses:
+        "201":
+          description: Candidate created
+  /candidates/{id}:
+    get:
+      summary: Get candidate profile
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Candidate profile
+    patch:
+      summary: Update candidate
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Candidate updated
+  /applications:
+    get:
+      summary: List applications
+      parameters:
+        - in: query
+          name: vacancyId
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: stageId
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Application list
+    post:
+      summary: Link candidate to vacancy
+      responses:
+        "201":
+          description: Application created
+  /applications/{id}/move:
+    post:
+      summary: Move application to another stage
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Application moved
+  /interviews:
+    post:
+      summary: Schedule interview
+      responses:
+        "201":
+          description: Interview scheduled
+  /communications:
+    post:
+      summary: Create or send communication
+      responses:
+        "201":
+          description: Communication created
+  /reports/funnel:
+    get:
+      summary: Stage conversion report
+      responses:
+        "200":
+          description: Funnel report
+  /reports/sources:
+    get:
+      summary: Candidate source report
+      responses:
+        "200":
+          description: Sources report
+components:
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
