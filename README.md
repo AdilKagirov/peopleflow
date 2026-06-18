@@ -20,6 +20,8 @@ Open:
 http://localhost:8000/peopleflow.html
 ```
 
+If the backend is running on `http://localhost:3000`, the prototype loads vacancies, candidates, applications, and reference data from PostgreSQL through the API. If the backend is not running, it falls back to local demo data in the browser.
+
 ## Start PostgreSQL
 
 Docker is required.
@@ -54,6 +56,10 @@ Backend URLs:
 ```text
 http://localhost:3000/api
 http://localhost:3000/api/health
+http://localhost:3000/api/vacancies
+http://localhost:3000/api/candidates
+http://localhost:3000/api/applications
+http://localhost:3000/api/reference
 ```
 
 The health endpoint checks the PostgreSQL connection when the database container is running.

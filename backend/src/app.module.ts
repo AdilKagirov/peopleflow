@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { ApplicationsModule } from './applications/applications.module';
 import { CandidatesModule } from './candidates/candidates.module';
 import { DatabaseModule } from './database/database.module';
+import { ReferenceModule } from './reference/reference.module';
 import { VacanciesModule } from './vacancies/vacancies.module';
 
 @Module({
@@ -14,6 +15,7 @@ import { VacanciesModule } from './vacancies/vacancies.module';
     VacanciesModule,
     CandidatesModule,
     ApplicationsModule,
+    ReferenceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

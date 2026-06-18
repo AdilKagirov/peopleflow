@@ -2,6 +2,7 @@ const stages = ["Резюме", "Телефонное интервью", "Соб
 const vacancyStatuses = ["Открыта", "Приостановлена", "Закрыта", "Заполнена"];
 const roles = ["Администратор", "Рекрутер", "Менеджер по найму", "HR филиала"];
 const permissions = ["Просмотр", "Редактирование", "Создание", "Кандидаты", "Аналитика"];
+const API_BASE = "http://localhost:3000/api";
 
 const demo = {
   role: "Администратор",
@@ -170,6 +171,7 @@ function init() {
   $("#saveRoles").addEventListener("click", saveRoles);
   $$(".modal-cancel").forEach((button) => button.addEventListener("click", () => $("#modal").close("cancel")));
   render();
+  refreshFromApi();
 }
 
 function switchView(view) {
@@ -192,6 +194,116 @@ function render() {
   renderMessages();
   renderReports();
   renderRoles();
+}
+
+async function refreshFromApi() {
+  try {
+    const [reference, vacancies, candidates, applications] = await Promise.all([
+      apiFetch("/reference"),
+      apiFetch("/vacancies"),
+      apiFetch("/candidates"),
+      apiFetch("/applications"),
+    ]);
+
+    state.reference = reference;
+    state.apiConnected = true;
+    state.stageOptions = reference.pipelineStages.map((stage) => ({
+      code: stage.code,
+      name: stage.name,
+    }));
+    state.vacancies = vacancies.map(mapApiVacancy);
+    state.candidates = candidates.map((candidate) => mapApiCandidate(candidate, applications));
+    state.applications = applications;
+    saveState();
+    syncReferenceFilters();
+    render();
+  } catch (error) {
+    state.apiConnected = false;
+    console.warn("PeopleFlow API is unavailable, using local data.", error);
+  }
+}
+
+async function apiFetch(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`${response.status} ${text}`);
+  }
+
+  return response.status === 204 ? null : response.json();
+}
+
+function syncReferenceFilters() {
+  if (state.reference?.vacancyStatuses?.length) {
+    $("#vacancyStatusFilter").innerHTML = `<option value="">Все статусы</option>` +
+      state.reference.vacancyStatuses.map((status) => `<option>${status.name}</option>`).join("");
+  }
+
+  if (state.stageOptions?.length) {
+    $("#candidateStageFilter").innerHTML = `<option value="">Все этапы</option>` +
+      state.stageOptions.map((stage) => `<option>${stage.name}</option>`).join("");
+  }
+}
+
+function mapApiVacancy(item) {
+  return {
+    id: item.id,
+    title: item.title,
+    department: item.department?.name || "Без отдела",
+    position: item.position,
+    description: item.description,
+    requirements: item.requirements,
+    conditions: item.workingConditions,
+    employment: item.employmentType?.name || "Не указано",
+    employmentTypeCode: item.employmentType?.code || "full_time",
+    salary: formatSalary(item.salary),
+    publishedAt: dateOnly(item.publishedAt),
+    closedAt: dateOnly(item.closedAt),
+    status: item.status?.name || "Открыта",
+    statusCode: item.status?.code || "open",
+    access: "По ролям KMF PeopleFlow",
+    attachments: "",
+    channels: "KMF PeopleFlow API",
+  };
+}
+
+function mapApiCandidate(item, applications = []) {
+  const application = applications.find((entry) => entry.candidate.id === item.id);
+  return {
+    id: item.id,
+    applicationId: application?.id || "",
+    name: item.fullName,
+    contacts: [item.email, item.phone].filter(Boolean).join(", ") || "Контакты не указаны",
+    vacancyTitle: application?.vacancy?.title || "Без активной вакансии",
+    source: item.source?.name || application?.source?.name || "Не указан",
+    experience: item.totalExperienceMonths ? `${Math.round(item.totalExperienceMonths / 12)} г.` : "не указано",
+    education: item.education || "",
+    skills: item.skills || "",
+    stage: application?.stage?.name || "Рассмотрение резюме",
+    stageCode: application?.stage?.code || "resume_review",
+    appliedAt: dateOnly(application?.appliedAt || item.createdAt),
+    tags: item.city || "",
+    notes: application?.summary || "",
+    rating: application?.rating || "3",
+    history: application ? `Отклик: ${application.status.name}` : "Профиль кандидата",
+    interviewAt: "",
+  };
+}
+
+function formatSalary(salary) {
+  if (!salary) return "Не указано";
+  const min = salary.min ? Number(salary.min).toLocaleString("ru-RU") : "";
+  const max = salary.max ? Number(salary.max).toLocaleString("ru-RU") : "";
+  const range = [min, max].filter(Boolean).join(" - ");
+  return range ? `${range} ${salary.currency}` : `Не указано ${salary.currency || ""}`.trim();
+}
+
+function dateOnly(value) {
+  return value ? String(value).slice(0, 10) : "";
 }
 
 function renderDashboard() {
@@ -271,14 +383,28 @@ function candidateCard(item) {
 }
 
 function renderPipeline() {
-  $("#pipelineBoard").innerHTML = stages.map((stage) => {
-    const candidates = state.candidates.filter((item) => item.stage === stage);
-    return `<section class="stage"><h3>${stage} · ${candidates.length}</h3>${candidates.map(pipelineCard).join("")}</section>`;
+  $("#pipelineBoard").innerHTML = getStageOptions().map((stage) => {
+    const candidates = state.candidates.filter((item) => item.stage === stage.name);
+    return `<section class="stage"><h3>${stage.name} · ${candidates.length}</h3>${candidates.map(pipelineCard).join("")}</section>`;
   }).join("");
-  $$(".stage-select").forEach((select) => select.addEventListener("change", (event) => {
+  $$(".stage-select").forEach((select) => select.addEventListener("change", async (event) => {
     const candidate = state.candidates.find((item) => item.id === event.target.dataset.id);
-    candidate.stage = event.target.value;
-    candidate.history += `; ${new Date().toLocaleDateString("ru-RU")} этап: ${event.target.value}`;
+    const selected = getStageOptions().find((stage) => stage.name === event.target.value);
+    if (state.apiConnected && candidate.applicationId && selected?.code) {
+      await apiFetch(`/applications/${candidate.applicationId}/move`, {
+        method: "POST",
+        body: JSON.stringify({
+          stageCode: selected.code,
+          comment: "Перемещено из интерфейса KMF PeopleFlow",
+        }),
+      });
+      await refreshFromApi();
+      return;
+    }
+
+    candidate.stage = selected?.name || event.target.value;
+    candidate.stageCode = selected?.code || candidate.stageCode;
+    candidate.history += `; ${new Date().toLocaleDateString("ru-RU")} этап: ${candidate.stage}`;
     saveState();
     render();
   }));
@@ -289,7 +415,7 @@ function pipelineCard(item) {
     <strong>${item.name}</strong>
     <p class="muted">${item.vacancyTitle}</p>
     <select class="stage-select" data-id="${item.id}" ${can("Редактирование") ? "" : "disabled"}>
-      ${stages.map((stage) => `<option ${stage === item.stage ? "selected" : ""}>${stage}</option>`).join("")}
+      ${getStageOptions().map((stage) => `<option ${stage.name === item.stage ? "selected" : ""}>${stage.name}</option>`).join("")}
     </select>
   </article>`;
 }
@@ -311,7 +437,7 @@ function renderReports() {
     ["Конверсия до финала", `${Math.round(stageCount("Финал") / Math.max(state.candidates.length, 1) * 100)}%`],
     ["Источники", new Set(state.candidates.map((item) => item.source)).size],
   ].map(metricCard).join("");
-  renderChart("#stageChart", stages.map((stage) => [stage, stageCount(stage)]));
+  renderChart("#stageChart", getStageOptions().map((stage) => [stage.name, stageCount(stage.name)]));
   const sources = groupBy(state.candidates, "source");
   renderChart("#sourceChart", Object.entries(sources).map(([key, value]) => [key, value.length]));
 }
@@ -343,7 +469,18 @@ function vacancyForm(id) {
     field("description", "Описание", item.description, true, "textarea", true),
     field("requirements", "Требования", item.requirements, true, "textarea", true),
     field("conditions", "Условия работы", item.conditions, true, "textarea", true),
-  ], (data) => {
+  ], async (data) => {
+    if (state.apiConnected) {
+      const payload = toVacancyPayload(data);
+      if (id) {
+        await apiFetch(`/vacancies/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      } else {
+        await apiFetch("/vacancies", { method: "POST", body: JSON.stringify(payload) });
+      }
+      await refreshFromApi();
+      return;
+    }
+
     if (id) Object.assign(item, data);
     else state.vacancies.unshift({ id: crypto.randomUUID(), ...data });
     saveState();
@@ -368,7 +505,19 @@ function candidateForm(id) {
     field("tags", "Теги", item.tags),
     field("notes", "Заметки", item.notes, false, "textarea", true),
     field("history", "История коммуникаций", item.history, false, "textarea", true),
-  ], (data) => {
+  ], async (data) => {
+    if (state.apiConnected) {
+      const payload = toCandidatePayload(data);
+      if (id) {
+        await apiFetch(`/candidates/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      } else {
+        const candidate = await apiFetch("/candidates", { method: "POST", body: JSON.stringify(payload) });
+        await createApplicationForCandidate(candidate.id, data);
+      }
+      await refreshFromApi();
+      return;
+    }
+
     if (id) Object.assign(item, data);
     else state.candidates.unshift({ id: crypto.randomUUID(), ...data });
     saveState();
@@ -410,11 +559,15 @@ function messageForm() {
 function openModal(title, fields, onSubmit) {
   $("#modalTitle").textContent = title;
   $("#modalBody").innerHTML = fields.join("");
-  $("#modalForm").onsubmit = (event) => {
+  $("#modalForm").onsubmit = async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-    onSubmit(data);
-    $("#modal").close();
+    try {
+      await onSubmit(data);
+      $("#modal").close();
+    } catch (error) {
+      alert(`Не удалось сохранить: ${error.message}`);
+    }
   };
   $("#modal").showModal();
 }
@@ -433,6 +586,95 @@ function selectField(name, label, options, value = "") {
       return `<option value="${option}" ${option === value || clean === value ? "selected" : ""}>${clean}</option>`;
     }).join("")}
   </select></label>`;
+}
+
+function getStageOptions() {
+  return state.stageOptions?.length
+    ? state.stageOptions
+    : stages.map((stage) => ({ code: stageToCode(stage), name: stage }));
+}
+
+function toVacancyPayload(data) {
+  const status = state.reference?.vacancyStatuses?.find((item) => item.name === data.status);
+  const employment = state.reference?.employmentTypes?.find((item) => item.name === data.employment);
+  return {
+    title: data.title,
+    position: data.position,
+    description: data.description,
+    requirements: data.requirements,
+    workingConditions: data.conditions,
+    statusCode: status?.code || statusNameToCode(data.status),
+    employmentTypeCode: employment?.code || "full_time",
+    salaryCurrency: "KZT",
+    publishedAt: data.publishedAt || null,
+    closedAt: data.closedAt || null,
+  };
+}
+
+function toCandidatePayload(data) {
+  const source = state.reference?.sources?.find((item) => item.name === data.source);
+  return {
+    fullName: data.name,
+    email: extractEmail(data.contacts),
+    phone: extractPhone(data.contacts),
+    education: data.education || null,
+    skills: data.skills,
+    sourceCode: source?.code || "manual",
+    consentPersonalData: true,
+  };
+}
+
+async function createApplicationForCandidate(candidateId, data) {
+  const vacancy = state.vacancies.find((item) => item.title === data.vacancyTitle);
+  if (!vacancy) return;
+
+  const stage = getStageOptions().find((item) => item.name === data.stage);
+  await apiFetch("/applications", {
+    method: "POST",
+    body: JSON.stringify({
+      vacancyId: vacancy.id,
+      candidateId,
+      sourceCode: "manual",
+      stageCode: stage?.code || "resume_review",
+      rating: Number(data.rating || 3),
+      summary: data.notes || null,
+      appliedAt: data.appliedAt || null,
+    }),
+  });
+}
+
+function extractEmail(value = "") {
+  return value.match(/[^\s,;]+@[^\s,;]+/)?.[0] || null;
+}
+
+function extractPhone(value = "") {
+  return value
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .find((item) => item && !item.includes("@")) || null;
+}
+
+function statusNameToCode(name) {
+  return {
+    "Открыта": "open",
+    "Приостановлена": "paused",
+    "Закрыта": "closed",
+    "Заполнена": "filled",
+  }[name] || "open";
+}
+
+function stageToCode(name) {
+  return {
+    "Резюме": "resume_review",
+    "Рассмотрение резюме": "resume_review",
+    "Телефонное интервью": "phone_screen",
+    "Собеседование": "onsite_interview",
+    "Личное собеседование": "onsite_interview",
+    "Тестовое задание": "test_task",
+    "Проверка рекомендаций": "reference_check",
+    "Финал": "final_interview",
+    "Финальное интервью": "final_interview",
+  }[name] || "resume_review";
 }
 
 function saveRoles() {

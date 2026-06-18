@@ -130,6 +130,54 @@ paths:
       responses:
         "200":
           description: Sources report
+  /reference:
+    get:
+      summary: Get all reference data
+      responses:
+        "200":
+          description: Reference dictionaries
+  /reference/pipeline-stages:
+    get:
+      summary: List pipeline stages
+      responses:
+        "200":
+          description: Pipeline stages
+  /reference/vacancy-statuses:
+    get:
+      summary: List vacancy statuses
+      responses:
+        "200":
+          description: Vacancy statuses
+  /reference/application-statuses:
+    get:
+      summary: List application statuses
+      responses:
+        "200":
+          description: Application statuses
+  /reference/sources:
+    get:
+      summary: List candidate sources
+      responses:
+        "200":
+          description: Candidate sources
+  /reference/employment-types:
+    get:
+      summary: List employment types
+      responses:
+        "200":
+          description: Employment types
+  /reference/departments:
+    get:
+      summary: List departments
+      responses:
+        "200":
+          description: Departments
+  /reference/users:
+    get:
+      summary: List active users
+      responses:
+        "200":
+          description: Active users
 components:
   parameters:
     Id:
