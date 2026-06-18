@@ -130,12 +130,12 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 function loadState() {
-  const saved = localStorage.getItem("estaff-state");
+  const saved = localStorage.getItem("peopleflow-state");
   return saved ? JSON.parse(saved) : structuredClone(demo);
 }
 
 function saveState() {
-  localStorage.setItem("estaff-state", JSON.stringify(state));
+  localStorage.setItem("peopleflow-state", JSON.stringify(state));
 }
 
 function init() {
