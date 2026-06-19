@@ -311,3 +311,37 @@ CREATE TABLE audit_logs (
 
 CREATE INDEX audit_logs_entity_idx ON audit_logs (entity_type, entity_id);
 CREATE INDEX audit_logs_actor_idx ON audit_logs (actor_id);
+
+CREATE TABLE hh_accounts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  employer_id text,
+  employer_name text,
+  access_token text,
+  refresh_token text,
+  token_expires_at timestamptz,
+  connected_by uuid REFERENCES users(id),
+  connected_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE hh_sync_runs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid REFERENCES hh_accounts(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'started',
+  started_at timestamptz NOT NULL DEFAULT now(),
+  finished_at timestamptz,
+  imported_candidates integer NOT NULL DEFAULT 0,
+  imported_applications integer NOT NULL DEFAULT 0,
+  error text
+);
+
+CREATE TABLE hh_external_mappings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id uuid REFERENCES hh_accounts(id) ON DELETE CASCADE,
+  entity_type text NOT NULL,
+  external_id text NOT NULL,
+  local_id uuid NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  synced_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (account_id, entity_type, external_id)
+);

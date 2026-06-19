@@ -178,6 +178,30 @@ paths:
       responses:
         "200":
           description: Active users
+  /imports/resumes:
+    post:
+      summary: Import candidate from uploaded resume file
+      responses:
+        "201":
+          description: Resume imported
+  /integrations/hh/status:
+    get:
+      summary: Get hh.kz integration status
+      responses:
+        "200":
+          description: HH integration status
+  /integrations/hh/connect:
+    get:
+      summary: Get hh.kz OAuth connect URL
+      responses:
+        "200":
+          description: HH OAuth URL
+  /integrations/hh/sync:
+    post:
+      summary: Start hh.kz sync
+      responses:
+        "201":
+          description: HH sync started or not configured
 components:
   parameters:
     Id:

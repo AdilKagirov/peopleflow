@@ -224,8 +224,9 @@ async function refreshFromApi() {
 }
 
 async function apiFetch(path, options = {}) {
+  const isForm = options.body instanceof FormData;
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: isForm ? options.headers || {} : { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   });
 
@@ -686,9 +687,23 @@ function saveRoles() {
   render();
 }
 
-function importResume(event) {
+async function importResume(event) {
   const file = event.target.files[0];
   if (!file) return;
+  if (state.apiConnected) {
+    try {
+      const form = new FormData();
+      form.append("resume", file);
+      if (state.vacancies[0]?.id) form.append("vacancyId", state.vacancies[0].id);
+      await apiFetch("/imports/resumes", { method: "POST", body: form });
+      event.target.value = "";
+      await refreshFromApi();
+      return;
+    } catch (error) {
+      alert(`Не удалось импортировать резюме: ${error.message}`);
+    }
+  }
+
   const name = file.name.replace(/\.[^.]+$/, "").replaceAll("_", " ");
   state.candidates.unshift({
     id: crypto.randomUUID(),

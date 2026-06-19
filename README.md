@@ -64,6 +64,34 @@ http://localhost:3000/api/reference
 
 The health endpoint checks the PostgreSQL connection when the database container is running.
 
+## Resume And HH Imports
+
+Manual resume upload endpoint:
+
+```text
+POST http://localhost:3000/api/imports/resumes
+field: resume
+optional field: vacancyId
+```
+
+The current implementation stores uploaded PDF/DOC/DOCX/TXT files, creates or updates a candidate, creates an attachment and resume record, and links the candidate to a vacancy when `vacancyId` is provided. TXT files get basic text parsing; PDF/DOC/DOCX parser integration is planned as the next enhancement.
+
+HH integration skeleton:
+
+```text
+GET  http://localhost:3000/api/integrations/hh/status
+GET  http://localhost:3000/api/integrations/hh/connect
+POST http://localhost:3000/api/integrations/hh/sync
+```
+
+Set these variables before real hh.kz OAuth integration:
+
+```text
+HH_CLIENT_ID=
+HH_CLIENT_SECRET=
+HH_REDIRECT_URI=http://localhost:3000/api/integrations/hh/oauth/callback
+```
+
 ## Project Direction
 
 The next implementation step is to add a real backend API and connect the UI to PostgreSQL:
