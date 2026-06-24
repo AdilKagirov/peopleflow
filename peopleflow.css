@@ -94,6 +94,15 @@ h3 { font-size: 15px; }
 .primary { color: #fff; background: var(--primary); }
 .primary:hover { background: var(--primary-dark); }
 .ghost { color: var(--text); background: #eef3f8; border: 1px solid var(--line); }
+.danger {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  color: #8b2f24;
+  background: #fdece7;
+  border: 1px solid #f3c4b8;
+  white-space: nowrap;
+}
 .view { display: none; }
 .view.active { display: block; }
 .panel, .chart-wrap {

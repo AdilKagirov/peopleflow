@@ -366,6 +366,7 @@ function renderCandidates() {
   });
   $("#candidatesList").innerHTML = items.map(candidateCard).join("") || empty("Кандидаты не найдены");
   $$(".edit-candidate").forEach((button) => button.addEventListener("click", () => candidateForm(button.dataset.id)));
+  $$(".delete-candidate").forEach((button) => button.addEventListener("click", () => deleteCandidate(button.dataset.id)));
 }
 
 function candidateCard(item) {
@@ -379,8 +380,33 @@ function candidateCard(item) {
     <p class="muted">${item.skills}</p>
     <div class="tags">${splitValues(item.tags).map((tag) => `<span class="tag">${tag}</span>`).join("")}</div>
     <p class="muted">${item.history}</p>
-    <button class="ghost edit-candidate" data-id="${item.id}" ${can("Кандидаты") ? "" : "disabled"}>Профиль</button>
+    <div class="card-actions">
+      <button class="ghost edit-candidate" data-id="${item.id}" ${can("Кандидаты") ? "" : "disabled"}>Профиль</button>
+      <button class="danger delete-candidate" data-id="${item.id}" ${can("Кандидаты") ? "" : "disabled"}>Удалить</button>
+    </div>
   </article>`;
+}
+
+async function deleteCandidate(id) {
+  const candidate = state.candidates.find((item) => item.id === id);
+  if (!candidate) return;
+
+  const confirmed = confirm(`Удалить кандидата "${candidate.name}"? Его отклики, резюме и импортированные вложения тоже будут удалены.`);
+  if (!confirmed) return;
+
+  try {
+    if (state.apiConnected) {
+      await apiFetch(`/candidates/${id}`, { method: "DELETE" });
+      await refreshFromApi();
+      return;
+    }
+
+    state.candidates = state.candidates.filter((item) => item.id !== id);
+    saveState();
+    render();
+  } catch (error) {
+    alert(`Не удалось удалить кандидата: ${error.message}`);
+  }
 }
 
 function renderPipeline() {
