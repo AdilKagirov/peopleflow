@@ -23,6 +23,7 @@
         <button class="nav-item" data-view="approvals">Согласования</button>
         <button class="nav-item" data-view="messages">Коммуникации</button>
         <button class="nav-item" data-view="reports">Отчеты</button>
+        <button class="nav-item" data-view="users">Пользователи</button>
         <button class="nav-item" data-view="settings">Роли</button>
       </nav>
       <div class="role-card">
@@ -163,6 +164,27 @@
             <button class="primary" id="sendMessage">Подготовить письмо</button>
           </div>
           <div id="messageTemplates" class="grid-list compact"></div>
+        </section>
+      </section>
+
+      <section class="view" id="usersView">
+        <section class="panel full">
+          <div class="section-head">
+            <div>
+              <h2>Учетные записи</h2>
+              <p class="muted">Роли и доступ к филиалам</p>
+            </div>
+            <button class="primary" id="newUser">+ Пользователь</button>
+          </div>
+          <div class="toolbar">
+            <input id="userSearch" type="search" placeholder="ФИО, email, филиал" />
+            <select id="userStatusFilter">
+              <option value="">Все статусы</option>
+              <option value="active">Активные</option>
+              <option value="blocked">Заблокированные</option>
+            </select>
+          </div>
+          <div id="usersList"></div>
         </section>
       </section>
 

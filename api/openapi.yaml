@@ -183,6 +183,33 @@ paths:
           description: Request is incomplete or not fully approved
         "404":
           description: Websoft branch code is not mapped
+  /users:
+    get:
+      summary: List user accounts and branch assignments
+      responses:
+        "200":
+          description: User account list
+        "403":
+          description: Administrator role required
+    post:
+      summary: Create a user account with role and branch access
+      responses:
+        "201":
+          description: User account created
+        "403":
+          description: Administrator role required
+        "409":
+          description: Email already exists
+  /users/{id}:
+    patch:
+      summary: Update, block, or reassign a user account
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: User account updated
+        "403":
+          description: Administrator role required
   /candidates/{id}/documents:
     get:
       summary: List candidate documents

@@ -49,4 +49,9 @@ export class ReferenceController {
   getBranches() {
     return this.referenceService.getBranches();
   }
+
+  @Get('roles')
+  getRoles() {
+    return this.referenceService.getRoles();
+  }
 }

@@ -80,6 +80,22 @@ X-PeopleFlow-User-Id: <user UUID>
 
 The frontend sidebar contains a current-user selector for testing head-office and branch views. Production deployment should replace this header simulation with authenticated SSO identity while keeping the same backend branch checks.
 
+## User Accounts
+
+Administrators manage accounts on the `Users` page. An account contains:
+
+```text
+Full name
+Corporate email and phone
+Role
+One or more accessible branches
+Primary branch
+All-branches access flag
+Active or blocked status
+```
+
+Only an administrator can call `POST /api/users` or `PATCH /api/users/:id`. Administrators cannot block themselves or remove their own administrator role. Passwords are intentionally not managed by the prototype; production authentication should use KMF SSO/Active Directory.
+
 ## Websoft Vacancy Import
 
 Only fully approved Websoft requests are accepted:

@@ -369,6 +369,19 @@ dialog::backdrop { background: rgba(16, 44, 59, 0.45); }
 }
 .form-field { display: grid; gap: 6px; }
 .form-field.full { grid-column: 1 / -1; }
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.checkbox-field input {
+  width: 16px;
+  height: 16px;
+}
 .checkbox-group {
   min-width: 0;
   margin: 0;

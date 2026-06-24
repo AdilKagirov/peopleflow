@@ -47,6 +47,7 @@ export class ReferenceService {
       departments,
       users,
       branches,
+      roles,
     ] = await Promise.all([
       this.getPipelineStages(),
       this.getVacancyStatuses(),
@@ -56,6 +57,7 @@ export class ReferenceService {
       this.getDepartments(),
       this.getUsers(),
       this.getBranches(),
+      this.getRoles(),
     ]);
 
     return {
@@ -67,6 +69,7 @@ export class ReferenceService {
       departments,
       users,
       branches,
+      roles,
     };
   }
 
@@ -187,6 +190,10 @@ export class ReferenceService {
       city: row.city,
       isHeadOffice: row.is_head_office,
     }));
+  }
+
+  async getRoles() {
+    return this.getCodeNameRows('select code, name from roles order by name');
   }
 
   private async getCodeNameRows(sql: string) {

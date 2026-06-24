@@ -208,6 +208,9 @@ function init() {
   $("#exportExcel").addEventListener("click", exportExcel);
   $("#exportPdf").addEventListener("click", () => window.print());
   $("#saveRoles").addEventListener("click", saveRoles);
+  $("#newUser").addEventListener("click", () => userForm());
+  $("#userSearch").addEventListener("input", renderUsers);
+  $("#userStatusFilter").addEventListener("change", renderUsers);
   $$(".modal-cancel").forEach((button) => button.addEventListener("click", () => $("#modal").close("cancel")));
   syncResumeVacancyOptions();
   render();
@@ -234,18 +237,20 @@ function render() {
   renderApprovals();
   renderMessages();
   renderReports();
+  renderUsers();
   renderRoles();
 }
 
 async function refreshFromApi() {
   try {
-    const [reference, vacancies, candidates, applications, approvals, interviews] = await Promise.all([
+    const [reference, vacancies, candidates, applications, approvals, interviews, users] = await Promise.all([
       apiFetch("/reference"),
       apiFetch("/vacancies"),
       apiFetch("/candidates"),
       apiFetch("/applications"),
       apiFetch("/approvals"),
       apiFetch("/interviews"),
+      canManageUsers() ? apiFetch("/users") : Promise.resolve([]),
     ]);
 
     state.reference = reference;
@@ -262,6 +267,7 @@ async function refreshFromApi() {
     state.applications = applications;
     state.approvals = approvals;
     state.interviews = interviews;
+    state.users = users;
     saveState();
     syncReferenceFilters();
     syncUserSelector();
@@ -884,6 +890,100 @@ function renderReports() {
   renderChart("#sourceChart", Object.entries(sources).map(([key, value]) => [key, value.length]));
 }
 
+function renderUsers() {
+  const viewButton = $('.nav-item[data-view="users"]');
+  const allowed = canManageUsers();
+  if (viewButton) viewButton.hidden = !allowed;
+  if (!allowed) {
+    if ($("#usersList")) $("#usersList").innerHTML = empty("Раздел доступен администратору");
+    return;
+  }
+  const query = $("#userSearch")?.value.toLowerCase() || "";
+  const status = $("#userStatusFilter")?.value || "";
+  const users = (state.users || []).filter((user) => {
+    const haystack = `${user.fullName} ${user.email} ${user.role?.name || ""} ${(user.branches || []).map((branch) => branch.name).join(" ")}`.toLowerCase();
+    const matchesStatus = !status || (status === "active" ? user.isActive : !user.isActive);
+    return haystack.includes(query) && matchesStatus;
+  });
+  $("#usersList").innerHTML = users.length
+    ? `<div class="record-list">${users.map((user) => `<article class="record-row">
+        <div class="record-main">
+          <div class="record-title">
+            <strong>${user.fullName}</strong>
+            <span class="badge ${user.isActive ? "open" : "closed"}">${user.isActive ? "Активен" : "Заблокирован"}</span>
+            ${user.accessAllBranches ? `<span class="tag">Все филиалы</span>` : ""}
+          </div>
+          <div class="record-details">
+            <span>${user.email}</span>
+            <span>${user.phone || "Телефон не указан"}</span>
+            <span>${user.role?.name || "Роль не назначена"}</span>
+            <span>${(user.branches || []).map((branch) => branch.name).join(", ") || "Филиалы не назначены"}</span>
+            <span>${user.primaryBranch?.name || "Основной филиал не указан"}</span>
+          </div>
+        </div>
+        <div class="record-actions">
+          <button class="ghost edit-user" data-id="${user.id}">Редактировать</button>
+        </div>
+      </article>`).join("")}</div>`
+    : empty("Пользователи не найдены");
+  $$(".edit-user").forEach((button) => button.addEventListener("click", () => userForm(button.dataset.id)));
+}
+
+function canManageUsers() {
+  const selected = state.reference?.users?.find((item) => item.id === currentUserId());
+  return selected ? selected.role?.code === "admin" : state.role === "Администратор";
+}
+
+function userForm(id) {
+  const item = (state.users || []).find((user) => user.id === id) || {};
+  const branches = state.reference?.branches || [];
+  const selectedBranches = (item.branches || []).map((branch) => branch.id);
+  const selectedPrimary = item.primaryBranch || branches[0];
+  const rolesList = state.reference?.roles || [];
+  openModal(id ? "Редактировать пользователя" : "Новый пользователь", [
+    field("fullName", "ФИО", item.fullName, true),
+    field("email", "Email", item.email, true, "email"),
+    field("phone", "Телефон", item.phone),
+    selectField(
+      "roleCode",
+      "Роль",
+      rolesList.map((role) => `${role.code}|${role.name}`),
+      item.role ? `${item.role.code}|${item.role.name}` : "recruiter|Рекрутер",
+    ),
+    checkboxField("accessAllBranches", "Доступ ко всем филиалам", item.accessAllBranches),
+    checkboxField("isActive", "Учетная запись активна", id ? item.isActive : true),
+    checkboxGroupField(
+      "branchIds",
+      "Доступные филиалы",
+      branches.map((branch) => ({ value: branch.id, label: branch.name })),
+      selectedBranches,
+    ),
+    selectField(
+      "primaryBranchId",
+      "Основной филиал",
+      branches.map((branch) => `${branch.id}|${branch.name}`),
+      selectedPrimary ? `${selectedPrimary.id}|${selectedPrimary.name}` : "",
+    ),
+  ], async (data) => {
+    const payload = {
+      fullName: data.fullName,
+      email: data.email,
+      phone: data.phone || null,
+      roleCode: data.roleCode.split("|")[0],
+      branchIds: data.branchIds,
+      primaryBranchId: data.primaryBranchId?.split("|")[0] || null,
+      accessAllBranches: data.accessAllBranches === "on",
+      isActive: data.isActive === "on",
+    };
+    if (id) {
+      await apiFetch(`/users/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+    } else {
+      await apiFetch("/users", { method: "POST", body: JSON.stringify(payload) });
+    }
+    await refreshFromApi();
+  });
+}
+
 function renderRoles() {
   $("#rolesMatrix").innerHTML = `<table>
     <thead><tr><th>Роль</th>${permissions.map((permission) => `<th>${permission}</th>`).join("")}</tr></thead>
@@ -1078,6 +1178,7 @@ function openModal(title, fields, onSubmit) {
     const formData = new FormData(event.currentTarget);
     const data = Object.fromEntries(formData.entries());
     data.vacancyIds = formData.getAll("vacancyIds");
+    data.branchIds = formData.getAll("branchIds");
     try {
       await onSubmit(data);
       $("#modal").close();
@@ -1093,6 +1194,13 @@ function field(name, label, value = "", required = false, type = "text", full = 
     ? `<textarea name="${name}" ${required ? "required" : ""}>${value || ""}</textarea>`
     : `<input name="${name}" type="${type}" value="${value || ""}" ${required ? "required" : ""}>`;
   return `<label class="form-field ${full ? "full" : ""}"><span>${label}</span>${control}</label>`;
+}
+
+function checkboxField(name, label, checked = false) {
+  return `<label class="form-field checkbox-field">
+    <input name="${name}" type="checkbox" ${checked ? "checked" : ""}>
+    <span>${label}</span>
+  </label>`;
 }
 
 function selectField(name, label, options, value = "") {

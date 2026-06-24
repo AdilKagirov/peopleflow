@@ -10,6 +10,7 @@ describe('PeopleFlow API (e2e)', () => {
   let candidateId: string | undefined;
   let branchCandidateId: string | undefined;
   let websoftVacancyId: string | undefined;
+  let managedUserId: string | undefined;
   let databaseService: DatabaseService;
 
   beforeAll(async () => {
@@ -42,6 +43,36 @@ describe('PeopleFlow API (e2e)', () => {
     expect(astanaRecruiter).toBeDefined();
     expect(almatyRecruiter).toBeDefined();
     expect(headOfficeRecruiter).toBeDefined();
+    const administrator = reference.body.users.find(
+      (item: { role?: { code: string } }) => item.role?.code === 'admin',
+    );
+    expect(administrator).toBeDefined();
+
+    const managedUser = await request(app.getHttpServer())
+      .post('/api/users')
+      .set('X-PeopleFlow-User-Id', administrator.id)
+      .send({
+        fullName: 'E2E Branch Recruiter',
+        email: `e2e.branch.recruiter.${Date.now()}@kmf.kz`,
+        roleCode: 'recruiter',
+        branchIds: [astana.id, almaty.id],
+        primaryBranchId: astana.id,
+        accessAllBranches: false,
+      })
+      .expect(201);
+    managedUserId = managedUser.body.id;
+    expect(managedUser.body.branches).toHaveLength(2);
+    expect(managedUser.body.primaryBranch.code).toBe('AST');
+
+    await request(app.getHttpServer())
+      .post('/api/users')
+      .set('X-PeopleFlow-User-Id', astanaRecruiter.id)
+      .send({
+        fullName: 'Forbidden User',
+        email: `forbidden.${Date.now()}@kmf.kz`,
+        roleCode: 'recruiter',
+      })
+      .expect(403);
 
     const externalRequestId = `WS-E2E-${Date.now()}`;
     const payload = {
@@ -244,6 +275,9 @@ describe('PeopleFlow API (e2e)', () => {
     }
     if (websoftVacancyId) {
       await databaseService.query('delete from vacancies where id = $1', [websoftVacancyId]);
+    }
+    if (managedUserId) {
+      await databaseService.query('delete from users where id = $1', [managedUserId]);
     }
     if (app) await app.close();
   });

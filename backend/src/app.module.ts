@@ -13,6 +13,7 @@ import { ImportsModule } from './imports/imports.module';
 import { InterviewsModule } from './interviews/interviews.module';
 import { ReferenceModule } from './reference/reference.module';
 import { VacanciesModule } from './vacancies/vacancies.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { VacanciesModule } from './vacancies/vacancies.module';
     InterviewsModule,
     HhIntegrationModule,
     WebsoftIntegrationModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
