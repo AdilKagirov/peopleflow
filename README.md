@@ -73,6 +73,17 @@ curl -X DELETE http://localhost:3000/api/candidates/<candidateId>
 
 Candidate applications and resume rows are removed by database cascade. Imported candidate attachments and local uploaded files are also cleaned up by the API.
 
+## Multiple Vacancies Per Candidate
+
+Recruiters can open a candidate profile and select several vacancies at once. The candidate remains one profile, while each selected vacancy creates an independent application with its own pipeline stage and approval history. Removing a vacancy from the profile deletes only that application, not the candidate.
+
+API used by the profile:
+
+```text
+POST   /api/applications
+DELETE /api/applications/:id
+```
+
 ## Candidate Approval Workflow
 
 Apply pending database migrations after pulling changes:

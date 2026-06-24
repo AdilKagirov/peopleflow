@@ -113,6 +113,14 @@ paths:
       responses:
         "200":
           description: Application moved
+  /applications/{id}:
+    delete:
+      summary: Unlink candidate from vacancy by deleting an application
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Application deleted
   /approvals:
     get:
       summary: List candidate approval requests

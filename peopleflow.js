@@ -296,18 +296,24 @@ function mapApiVacancy(item) {
 }
 
 function mapApiCandidate(item, applications = []) {
-  const application = applications.find((entry) => entry.candidate.id === item.id);
+  const candidateApplications = applications.filter((entry) => entry.candidate.id === item.id);
+  const application = candidateApplications[0];
+  const vacancyTitles = candidateApplications.map((entry) => entry.vacancy.title);
+  const stageNames = [...new Set(candidateApplications.map((entry) => entry.stage?.name).filter(Boolean))];
   return {
     id: item.id,
     applicationId: application?.id || "",
+    applications: candidateApplications,
+    vacancyIds: candidateApplications.map((entry) => entry.vacancy.id),
     name: item.fullName,
     contacts: [item.email, item.phone].filter(Boolean).join(", ") || "Контакты не указаны",
-    vacancyTitle: application?.vacancy?.title || "Без активной вакансии",
+    vacancyTitle: vacancyTitles.join(", ") || "Без активной вакансии",
     source: item.source?.name || application?.source?.name || "Не указан",
     experience: item.totalExperienceMonths ? `${Math.round(item.totalExperienceMonths / 12)} г.` : "не указано",
     education: item.education || "",
     skills: item.skills || "",
-    stage: application?.stage?.name || "Рассмотрение резюме",
+    stage: stageNames.join(", ") || "Рассмотрение резюме",
+    stages: stageNames,
     stageCode: application?.stage?.code || "resume_review",
     appliedAt: dateOnly(application?.appliedAt || item.createdAt),
     tags: item.city || "",
@@ -392,7 +398,7 @@ function renderCandidates() {
   const stage = $("#candidateStageFilter")?.value || "";
   const items = state.candidates.filter((item) => {
     const haystack = `${item.name} ${item.contacts} ${item.skills} ${item.tags}`.toLowerCase();
-    return haystack.includes(query) && (!stage || item.stage === stage);
+    return haystack.includes(query) && (!stage || item.stages?.includes(stage) || item.stage === stage);
   });
   $("#candidatesList").innerHTML = items.length ? candidateList(items) : empty("Кандидаты не найдены");
   $$(".edit-candidate").forEach((button) => button.addEventListener("click", () => candidateForm(button.dataset.id)));
@@ -405,17 +411,22 @@ function candidateList(items) {
 }
 
 function candidateRow(item) {
-  const workflowActions = item.applicationId && canRequestApproval()
-    ? `<div class="record-workflow-actions">
-        <button class="workflow-button request-approval" data-id="${item.applicationId}" data-type="customer">Заказчику</button>
-        <button class="workflow-button request-approval" data-id="${item.applicationId}" data-type="security">В СБ</button>
-      </div>`
+  const stageLabel = item.applications?.length > 1
+    ? formatVacancyCount(item.applications.length)
+    : item.stage;
+  const workflowActions = item.applications?.length && canRequestApproval()
+    ? `<div class="application-workflows">${item.applications.map((application) => `
+        <div class="record-workflow-actions">
+          <span>${application.vacancy.title}</span>
+          <button class="workflow-button request-approval" data-id="${application.id}" data-type="customer">Заказчику</button>
+          <button class="workflow-button request-approval" data-id="${application.id}" data-type="security">В СБ</button>
+        </div>`).join("")}</div>`
     : "";
   return `<article class="record-row">
     <div class="record-main">
       <div class="record-title">
         <strong>${item.name}</strong>
-        <span class="badge open">${item.stage}</span>
+        <span class="badge open">${stageLabel}</span>
       </div>
       <div class="record-details">
         <span>${item.contacts}</span>
@@ -435,6 +446,19 @@ function candidateRow(item) {
 
 function statusBadgeClass(status) {
   return status === "Открыта" ? "open" : status === "Приостановлена" ? "pause" : "closed";
+}
+
+function formatVacancyCount(count) {
+  const lastTwo = count % 100;
+  const last = count % 10;
+  const word = lastTwo >= 11 && lastTwo <= 14
+    ? "вакансий"
+    : last === 1
+      ? "вакансия"
+      : last >= 2 && last <= 4
+        ? "вакансии"
+        : "вакансий";
+  return `${count} ${word}`;
 }
 
 async function deleteCandidate(id) {
@@ -460,15 +484,18 @@ async function deleteCandidate(id) {
 }
 
 function renderPipeline() {
+  const entries = getPipelineEntries();
   $("#pipelineBoard").innerHTML = getStageOptions().map((stage) => {
-    const candidates = state.candidates.filter((item) => item.stage === stage.name);
+    const candidates = entries.filter((item) => item.stage === stage.name);
     return `<section class="stage"><h3>${stage.name} · ${candidates.length}</h3>${candidates.map(pipelineCard).join("")}</section>`;
   }).join("");
   $$(".stage-select").forEach((select) => select.addEventListener("change", async (event) => {
-    const candidate = state.candidates.find((item) => item.id === event.target.dataset.id);
+    const applicationId = event.target.dataset.applicationId;
+    const candidateId = event.target.dataset.candidateId;
+    const candidate = state.candidates.find((item) => item.id === candidateId);
     const selected = getStageOptions().find((stage) => stage.name === event.target.value);
-    if (state.apiConnected && candidate.applicationId && selected?.code) {
-      await apiFetch(`/applications/${candidate.applicationId}/move`, {
+    if (state.apiConnected && applicationId && selected?.code) {
+      await apiFetch(`/applications/${applicationId}/move`, {
         method: "POST",
         body: JSON.stringify({
           stageCode: selected.code,
@@ -491,10 +518,23 @@ function pipelineCard(item) {
   return `<article class="candidate-mini">
     <strong>${item.name}</strong>
     <p class="muted">${item.vacancyTitle}</p>
-    <select class="stage-select" data-id="${item.id}" ${can("Редактирование") ? "" : "disabled"}>
+    <select class="stage-select" data-application-id="${item.applicationId || ""}" data-candidate-id="${item.candidateId || item.id}" ${can("Редактирование") ? "" : "disabled"}>
       ${getStageOptions().map((stage) => `<option ${stage.name === item.stage ? "selected" : ""}>${stage.name}</option>`).join("")}
     </select>
   </article>`;
+}
+
+function getPipelineEntries() {
+  if (!state.apiConnected || !state.applications?.length) return state.candidates;
+  return state.applications.map((application) => ({
+    id: `${application.candidate.id}-${application.id}`,
+    candidateId: application.candidate.id,
+    applicationId: application.id,
+    name: application.candidate.name,
+    vacancyTitle: application.vacancy.title,
+    stage: application.stage?.name || "Рассмотрение резюме",
+    stageCode: application.stage?.code || "resume_review",
+  }));
 }
 
 function renderApprovals() {
@@ -680,15 +720,28 @@ function vacancyForm(id) {
 
 function candidateForm(id) {
   const item = state.candidates.find((candidate) => candidate.id === id) || {};
+  const newApplicationStage = item.applications?.length === 1
+    ? item.applications[0].stage?.name
+    : "Рассмотрение резюме";
+  const selectedVacancyIds = item.vacancyIds?.length
+    ? item.vacancyIds
+    : state.vacancies
+      .filter((vacancy) => vacancy.title === item.vacancyTitle)
+      .map((vacancy) => vacancy.id);
   openModal(id ? "Профиль кандидата" : "Новый кандидат", [
     field("name", "ФИО", item.name, true),
     field("contacts", "Контакты", item.contacts, true),
-    selectField("vacancyTitle", "Вакансия", state.vacancies.map((vacancy) => vacancy.title), item.vacancyTitle),
+    checkboxGroupField(
+      "vacancyIds",
+      "Вакансии кандидата",
+      state.vacancies.map((vacancy) => ({ value: vacancy.id, label: vacancy.title })),
+      selectedVacancyIds,
+    ),
     field("source", "Источник", item.source || "Ручной ввод", true),
     field("experience", "Опыт", item.experience),
     field("education", "Образование", item.education),
     field("skills", "Навыки", item.skills, true),
-    selectField("stage", "Этап", stages, item.stage || "Резюме"),
+    selectField("stage", "Начальный этап для новых вакансий", getStageOptions().map((stage) => stage.name), newApplicationStage),
     field("appliedAt", "Дата отклика", item.appliedAt || today(), true, "date"),
     field("rating", "Оценка рекрутера", item.rating || "3", true, "number"),
     field("interviewAt", "Дата интервью", item.interviewAt, false, "datetime-local"),
@@ -700,14 +753,19 @@ function candidateForm(id) {
       const payload = toCandidatePayload(data);
       if (id) {
         await apiFetch(`/candidates/${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+        await syncCandidateApplications(id, data);
       } else {
         const candidate = await apiFetch("/candidates", { method: "POST", body: JSON.stringify(payload) });
-        await createApplicationForCandidate(candidate.id, data);
+        await syncCandidateApplications(candidate.id, data);
       }
       await refreshFromApi();
       return;
     }
 
+    data.vacancyTitle = state.vacancies
+      .filter((vacancy) => data.vacancyIds.includes(vacancy.id))
+      .map((vacancy) => vacancy.title)
+      .join(", ") || "Без активной вакансии";
     if (id) Object.assign(item, data);
     else state.candidates.unshift({ id: crypto.randomUUID(), ...data });
     saveState();
@@ -751,7 +809,9 @@ function openModal(title, fields, onSubmit) {
   $("#modalBody").innerHTML = fields.join("");
   $("#modalForm").onsubmit = async (event) => {
     event.preventDefault();
-    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const formData = new FormData(event.currentTarget);
+    const data = Object.fromEntries(formData.entries());
+    data.vacancyIds = formData.getAll("vacancyIds");
     try {
       await onSubmit(data);
       $("#modal").close();
@@ -776,6 +836,20 @@ function selectField(name, label, options, value = "") {
       return `<option value="${option}" ${option === value || clean === value ? "selected" : ""}>${clean}</option>`;
     }).join("")}
   </select></label>`;
+}
+
+function checkboxGroupField(name, label, options, selectedValues = []) {
+  const selected = new Set(selectedValues);
+  const controls = options.length
+    ? options.map((option) => `<label class="checkbox-option">
+        <input type="checkbox" name="${name}" value="${option.value}" ${selected.has(option.value) ? "checked" : ""}>
+        <span>${option.label}</span>
+      </label>`).join("")
+    : `<span class="muted">Сначала создайте вакансию</span>`;
+  return `<fieldset class="form-field full checkbox-group">
+    <legend>${label}</legend>
+    <div class="checkbox-options">${controls}</div>
+  </fieldset>`;
 }
 
 function getStageOptions() {
@@ -814,23 +888,31 @@ function toCandidatePayload(data) {
   };
 }
 
-async function createApplicationForCandidate(candidateId, data) {
-  const vacancy = state.vacancies.find((item) => item.title === data.vacancyTitle);
-  if (!vacancy) return;
-
+async function syncCandidateApplications(candidateId, data) {
+  const vacancyIds = [...new Set(data.vacancyIds || [])];
+  const existing = state.applications.filter((application) => application.candidate.id === candidateId);
+  const selected = new Set(vacancyIds);
+  const existingVacancies = new Set(existing.map((application) => application.vacancy.id));
   const stage = getStageOptions().find((item) => item.name === data.stage);
-  await apiFetch("/applications", {
-    method: "POST",
-    body: JSON.stringify({
-      vacancyId: vacancy.id,
-      candidateId,
-      sourceCode: "manual",
-      stageCode: stage?.code || "resume_review",
-      rating: Number(data.rating || 3),
-      summary: data.notes || null,
-      appliedAt: data.appliedAt || null,
-    }),
-  });
+
+  await Promise.all(existing
+    .filter((application) => !selected.has(application.vacancy.id))
+    .map((application) => apiFetch(`/applications/${application.id}`, { method: "DELETE" })));
+
+  await Promise.all(vacancyIds
+    .filter((vacancyId) => !existingVacancies.has(vacancyId))
+    .map((vacancyId) => apiFetch("/applications", {
+      method: "POST",
+      body: JSON.stringify({
+        vacancyId,
+        candidateId,
+        sourceCode: "manual",
+        stageCode: stage?.code || "resume_review",
+        rating: Number(data.rating || 3),
+        summary: data.notes || null,
+        appliedAt: data.appliedAt || null,
+      }),
+    })));
 }
 
 function extractEmail(value = "") {

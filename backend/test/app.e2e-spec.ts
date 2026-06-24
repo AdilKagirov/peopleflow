@@ -67,6 +67,19 @@ describe('PeopleFlow API (e2e)', () => {
       .send({ decision: 'approved', comment: 'Security approved' })
       .expect(201);
     expect(securityDecision.body.currentStage.code).toBe('recruiter_followup');
+
+    const deletedApplication = await request(app.getHttpServer())
+      .delete(`/api/applications/${application.body.id}`)
+      .expect(200);
+    expect(deletedApplication.body).toEqual({
+      deleted: true,
+      applicationId: application.body.id,
+    });
+
+    const candidateAfterUnlink = await request(app.getHttpServer())
+      .get(`/api/candidates/${candidateId}`)
+      .expect(200);
+    expect(candidateAfterUnlink.body.applicationsCount).toBe(0);
   });
 
   afterAll(async () => {

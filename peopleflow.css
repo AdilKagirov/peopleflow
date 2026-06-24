@@ -216,8 +216,23 @@ textarea { min-height: 86px; resize: vertical; }
 }
 .record-workflow-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+.application-workflows {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+.record-workflow-actions > span {
+  min-width: 160px;
+  max-width: 280px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .portal-shortcuts {
   display: flex;
@@ -337,6 +352,44 @@ dialog::backdrop { background: rgba(16, 44, 59, 0.45); }
 }
 .form-field { display: grid; gap: 6px; }
 .form-field.full { grid-column: 1 / -1; }
+.checkbox-group {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.checkbox-group legend {
+  padding: 0 5px;
+}
+.checkbox-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 190px;
+  overflow: auto;
+}
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.checkbox-option input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+.checkbox-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .modal-actions {
   flex: 0 0 auto;
   justify-content: flex-end;
@@ -365,6 +418,7 @@ dialog::backdrop { background: rgba(16, 44, 59, 0.45); }
   .topbar, .section-head { align-items: flex-start; flex-direction: column; }
   .nav { grid-template-columns: 1fr 1fr; }
   .form-grid { grid-template-columns: 1fr; }
+  .checkbox-options { grid-template-columns: 1fr; }
   .record-row {
     grid-template-columns: 1fr;
     align-items: stretch;

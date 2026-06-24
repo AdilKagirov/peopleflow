@@ -251,6 +251,12 @@ export class ApplicationsService {
     return this.findOne(id);
   }
 
+  async remove(id: string) {
+    await this.findOne(id);
+    await this.databaseService.query('delete from applications where id = $1', [id]);
+    return { deleted: true, applicationId: id };
+  }
+
   async move(id: string, dto: MoveApplicationDto) {
     this.require(dto.stageCode, 'stageCode');
 
@@ -439,4 +445,3 @@ export class ApplicationsService {
     }
   }
 }
-
