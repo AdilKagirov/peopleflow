@@ -893,10 +893,17 @@ async function syncCandidateApplications(candidateId, data) {
   const existing = state.applications.filter((application) => application.candidate.id === candidateId);
   const selected = new Set(vacancyIds);
   const existingVacancies = new Set(existing.map((application) => application.vacancy.id));
+  const removed = existing.filter((application) => !selected.has(application.vacancy.id));
+  const applicationsWithApprovals = new Set((state.approvals || []).map((approval) => approval.applicationId));
+  const protectedApplications = removed.filter((application) => applicationsWithApprovals.has(application.id));
   const stage = getStageOptions().find((item) => item.name === data.stage);
 
-  await Promise.all(existing
-    .filter((application) => !selected.has(application.vacancy.id))
+  if (protectedApplications.length) {
+    const titles = protectedApplications.map((application) => application.vacancy.title).join(", ");
+    throw new Error(`Нельзя снять вакансии с историей согласования: ${titles}`);
+  }
+
+  await Promise.all(removed
     .map((application) => apiFetch(`/applications/${application.id}`, { method: "DELETE" })));
 
   await Promise.all(vacancyIds

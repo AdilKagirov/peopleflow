@@ -121,6 +121,8 @@ paths:
       responses:
         "200":
           description: Application deleted
+        "409":
+          description: Application has approval history and cannot be deleted
   /approvals:
     get:
       summary: List candidate approval requests

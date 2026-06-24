@@ -86,16 +86,25 @@ function approvalItem(item) {
   </article>`;
 }
 
-function openDecision(id, decision) {
-  const item = approvals.find((approval) => approval.id === id);
-  if (!item) return;
-  activeDecision = { id, decision };
-  $("#decisionType").textContent = decision === "approved" ? "Одобрение" : "Отклонение";
-  $("#decisionCandidate").textContent = item.candidate.name;
-  $("#decisionComment").value = "";
-  $("#confirmDecision").textContent = decision === "approved" ? "Одобрить кандидата" : "Отклонить кандидата";
-  $("#decisionDialog").showModal();
-  $("#decisionComment").focus();
+async function openDecision(id, decision) {
+  try {
+    const item = await apiFetch(`/approvals/${id}`);
+    if (item.status !== "pending") {
+      await loadApprovals();
+      alert("По этому согласованию решение уже принято. Очередь обновлена.");
+      return;
+    }
+    activeDecision = { id, decision };
+    $("#decisionType").textContent = decision === "approved" ? "Одобрение" : "Отклонение";
+    $("#decisionCandidate").textContent = item.candidate.name;
+    $("#decisionComment").value = "";
+    $("#confirmDecision").textContent = decision === "approved" ? "Одобрить кандидата" : "Отклонить кандидата";
+    $("#decisionDialog").showModal();
+    $("#decisionComment").focus();
+  } catch (error) {
+    await loadApprovals();
+    alert("Согласование уже недоступно. Очередь обновлена; попросите рекрутера отправить кандидата повторно.");
+  }
 }
 
 async function submitDecision(event) {
@@ -114,7 +123,14 @@ async function submitDecision(event) {
     activeDecision = null;
     await loadApprovals();
   } catch (error) {
-    alert(`Не удалось сохранить решение: ${error.message}`);
+    if (error.message.startsWith("404:")) {
+      $("#decisionDialog").close();
+      activeDecision = null;
+      await loadApprovals();
+      alert("Согласование уже недоступно. Очередь обновлена; попросите рекрутера отправить кандидата повторно.");
+    } else {
+      alert(`Не удалось сохранить решение: ${error.message}`);
+    }
   } finally {
     button.disabled = false;
   }
@@ -159,8 +175,14 @@ function init() {
   $("#decisionForm").addEventListener("submit", submitDecision);
   $("#closeDialog").addEventListener("click", closeDecision);
   $("#cancelDecision").addEventListener("click", closeDecision);
+  window.addEventListener("focus", loadApprovals);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) loadApprovals();
+  });
+  window.setInterval(() => {
+    if (!document.hidden && !$("#decisionDialog").open) loadApprovals();
+  }, 15000);
   loadApprovals();
 }
 
 init();
-

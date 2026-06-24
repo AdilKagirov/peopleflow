@@ -253,6 +253,13 @@ export class ApplicationsService {
 
   async remove(id: string) {
     await this.findOne(id);
+    const approvals = await this.databaseService.query(
+      'select 1 from approval_requests where application_id = $1 limit 1',
+      [id],
+    );
+    if (approvals.rowCount) {
+      throw new ConflictException('Application with approval history cannot be deleted');
+    }
     await this.databaseService.query('delete from applications where id = $1', [id]);
     return { deleted: true, applicationId: id };
   }

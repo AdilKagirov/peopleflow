@@ -35,7 +35,24 @@ describe('PeopleFlow API (e2e)', () => {
       .expect(201);
     candidateId = candidate.body.id;
 
-    const application = await request(app.getHttpServer())
+    let application = await request(app.getHttpServer())
+      .post('/api/applications')
+      .send({
+        candidateId,
+        vacancyId: vacancies.body[0].id,
+        sourceCode: 'manual',
+      })
+      .expect(201);
+
+    const deletedApplication = await request(app.getHttpServer())
+      .delete(`/api/applications/${application.body.id}`)
+      .expect(200);
+    expect(deletedApplication.body).toEqual({
+      deleted: true,
+      applicationId: application.body.id,
+    });
+
+    application = await request(app.getHttpServer())
       .post('/api/applications')
       .send({
         candidateId,
@@ -68,18 +85,14 @@ describe('PeopleFlow API (e2e)', () => {
       .expect(201);
     expect(securityDecision.body.currentStage.code).toBe('recruiter_followup');
 
-    const deletedApplication = await request(app.getHttpServer())
+    await request(app.getHttpServer())
       .delete(`/api/applications/${application.body.id}`)
-      .expect(200);
-    expect(deletedApplication.body).toEqual({
-      deleted: true,
-      applicationId: application.body.id,
-    });
+      .expect(409);
 
-    const candidateAfterUnlink = await request(app.getHttpServer())
+    const candidateWithApprovalHistory = await request(app.getHttpServer())
       .get(`/api/candidates/${candidateId}`)
       .expect(200);
-    expect(candidateAfterUnlink.body.applicationsCount).toBe(0);
+    expect(candidateWithApprovalHistory.body.applicationsCount).toBe(1);
   });
 
   afterAll(async () => {
