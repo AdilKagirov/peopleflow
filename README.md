@@ -64,6 +64,14 @@ http://localhost:3000/api/reference
 
 The health endpoint checks the PostgreSQL connection when the database container is running.
 
+Delete an imported candidate:
+
+```bash
+curl -X DELETE http://localhost:3000/api/candidates/<candidateId>
+```
+
+Candidate applications and resume rows are removed by database cascade. Imported candidate attachments and local uploaded files are also cleaned up by the API.
+
 ## Resume And HH Imports
 
 Manual resume upload endpoint:

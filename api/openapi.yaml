@@ -76,6 +76,13 @@ paths:
       responses:
         "200":
           description: Candidate updated
+    delete:
+      summary: Delete candidate and related imported resume records
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "200":
+          description: Candidate deleted
   /applications:
     get:
       summary: List applications

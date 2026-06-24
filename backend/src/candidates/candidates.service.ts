@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { QueryResultRow } from 'pg';
+import { unlink } from 'node:fs/promises';
 import { compact, toNumber } from '../common/sql';
 import { DatabaseService } from '../database/database.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
@@ -26,6 +27,11 @@ interface CandidateRow extends QueryResultRow {
   applications_count: number;
   created_at: string;
   updated_at: string;
+}
+
+interface AttachmentRow extends QueryResultRow {
+  id: string;
+  file_path: string;
 }
 
 @Injectable()
@@ -162,6 +168,40 @@ export class CandidatesService {
     return this.findOne(id);
   }
 
+  async remove(id: string) {
+    await this.findOne(id);
+    const attachments = await this.databaseService.query<AttachmentRow>(
+      `select id, file_path
+       from attachments
+       where owner_type = 'candidate' and owner_id = $1`,
+      [id],
+    );
+
+    await this.databaseService.query('delete from candidates where id = $1', [id]);
+    await this.databaseService.query(
+      `delete from attachments
+       where owner_type = 'candidate' and owner_id = $1`,
+      [id],
+    );
+
+    const deletedFiles: string[] = [];
+    for (const attachment of attachments.rows) {
+      try {
+        await unlink(attachment.file_path);
+        deletedFiles.push(attachment.file_path);
+      } catch {
+        // The database deletion should not fail because a local file is already missing.
+      }
+    }
+
+    return {
+      deleted: true,
+      candidateId: id,
+      removedAttachments: attachments.rowCount,
+      removedFiles: deletedFiles.length,
+    };
+  }
+
   private baseQuery() {
     return `select
       c.id, c.first_name, c.last_name, c.middle_name, c.full_name,
@@ -218,4 +258,3 @@ export class CandidatesService {
     }
   }
 }
-
