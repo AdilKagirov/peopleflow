@@ -219,6 +219,17 @@ textarea { min-height: 86px; resize: vertical; }
   gap: 8px;
   flex-wrap: wrap;
 }
+.portal-shortcuts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.portal-shortcuts a.ghost {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
 .workflow-button,
 .approve {
   min-height: 32px;

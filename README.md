@@ -98,6 +98,15 @@ POST /api/approvals/:id/decision
 
 The frontend provides an `Approvals` page. Recruiters send a candidate to the customer or security, while the Customer and Security roles receive their own decision queues.
 
+Dedicated approval portals:
+
+```text
+http://localhost:8000/customer-approvals.html
+http://localhost:8000/security-approvals.html
+```
+
+The customer portal contains only customer approvals. The security portal contains only security checks. Both portals support status filters, comments, approval, rejection, and automatic queue refresh after a decision.
+
 ## Resume And HH Imports
 
 Manual resume upload endpoint:
