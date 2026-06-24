@@ -131,7 +131,7 @@ field: resume
 optional field: vacancyId
 ```
 
-The current implementation stores uploaded PDF/DOC/DOCX/TXT files, creates or updates a candidate, creates an attachment and resume record, and links the candidate to a vacancy when `vacancyId` is provided. TXT files get basic text parsing; PDF/DOC/DOCX parser integration is planned as the next enhancement.
+The implementation stores uploaded PDF/DOC/DOCX/TXT files, creates or updates a candidate, creates an attachment and resume record, and links the candidate to a vacancy only when `vacancyId` is explicitly selected. Text PDFs, DOCX files, TXT files, and RTF documents saved with a `.doc` extension are parsed automatically. The parser extracts the candidate name, contacts, city, desired position, experience, education, and skills. Scanned PDFs without a text layer and unsupported legacy binary DOC files are marked for manual review instead of using the filename as the candidate name.
 
 HH integration skeleton:
 

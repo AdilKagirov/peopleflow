@@ -191,6 +191,7 @@ function init() {
   $("#exportPdf").addEventListener("click", () => window.print());
   $("#saveRoles").addEventListener("click", saveRoles);
   $$(".modal-cancel").forEach((button) => button.addEventListener("click", () => $("#modal").close("cancel")));
+  syncResumeVacancyOptions();
   render();
   refreshFromApi();
 }
@@ -242,6 +243,7 @@ async function refreshFromApi() {
     state.interviews = interviews;
     saveState();
     syncReferenceFilters();
+    syncResumeVacancyOptions();
     render();
   } catch (error) {
     state.apiConnected = false;
@@ -274,6 +276,15 @@ function syncReferenceFilters() {
     $("#candidateStageFilter").innerHTML = `<option value="">Все этапы</option>` +
       state.stageOptions.map((stage) => `<option>${stage.name}</option>`).join("");
   }
+}
+
+function syncResumeVacancyOptions() {
+  const select = $("#resumeVacancy");
+  if (!select) return;
+  const selected = select.value;
+  select.innerHTML = `<option value="">Импорт без вакансии</option>` +
+    state.vacancies.map((vacancy) => `<option value="${vacancy.id}">${vacancy.title}</option>`).join("");
+  if (state.vacancies.some((vacancy) => vacancy.id === selected)) select.value = selected;
 }
 
 function mapApiVacancy(item) {
@@ -314,6 +325,9 @@ function mapApiCandidate(item, applications = [], interviews = []) {
     contacts: [item.email, item.phone].filter(Boolean).join(", ") || "Контакты не указаны",
     vacancyTitle: vacancyTitles.join(", ") || "Без активной вакансии",
     source: item.source?.name || application?.source?.name || "Не указан",
+    city: item.city || "",
+    currentPosition: item.currentPosition || "",
+    totalExperienceMonths: item.totalExperienceMonths,
     experience: item.totalExperienceMonths ? `${Math.round(item.totalExperienceMonths / 12)} г.` : "не указано",
     education: item.education || "",
     skills: item.skills || "",
@@ -457,6 +471,7 @@ function candidateRow(item) {
       <div class="record-details">
         <span>${item.contacts}</span>
         <span>${item.vacancyTitle}</span>
+        <span>${item.currentPosition || "Должность не указана"}</span>
         <span>${item.source}</span>
         <span>${item.skills || "—"}</span>
         <span>${item.appliedAt || "—"}</span>
@@ -811,7 +826,9 @@ function candidateForm(id) {
       selectedVacancyIds,
     ),
     field("source", "Источник", item.source || "Ручной ввод", true),
-    field("experience", "Опыт", item.experience),
+    field("currentPosition", "Текущая или желаемая должность", item.currentPosition),
+    field("city", "Город", item.city),
+    field("totalExperienceMonths", "Опыт, месяцев", item.totalExperienceMonths, false, "number"),
     field("education", "Образование", item.education),
     field("skills", "Навыки", item.skills, true),
     selectField("stage", "Начальный этап для новых вакансий", getStageOptions().map((stage) => stage.name), newApplicationStage),
@@ -1027,6 +1044,9 @@ function toCandidatePayload(data) {
     phone: extractPhone(data.contacts),
     education: data.education || null,
     skills: data.skills,
+    city: data.city || null,
+    currentPosition: data.currentPosition || null,
+    totalExperienceMonths: data.totalExperienceMonths ? Number(data.totalExperienceMonths) : null,
     sourceCode: source?.code || "manual",
     consentPersonalData: true,
   };
@@ -1116,7 +1136,8 @@ async function importResume(event) {
     try {
       const form = new FormData();
       form.append("resume", file);
-      if (state.vacancies[0]?.id) form.append("vacancyId", state.vacancies[0].id);
+      const vacancyId = $("#resumeVacancy")?.value;
+      if (vacancyId) form.append("vacancyId", vacancyId);
       await apiFetch("/imports/resumes", { method: "POST", body: form });
       event.target.value = "";
       await refreshFromApi();

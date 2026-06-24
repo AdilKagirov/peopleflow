@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { QueryResultRow } from 'pg';
 import { readFile } from 'node:fs/promises';
-import { basename, extname } from 'node:path';
+import { extname } from 'node:path';
+import mammoth from 'mammoth';
+import * as rtf2text from 'rtf2text';
 import { DatabaseService } from '../database/database.service';
+import { ParsedResume, parseResumeText } from './resume-parser';
 
 interface ImportOptions {
   vacancyId?: string;
@@ -18,7 +21,7 @@ export class ImportsService {
 
   async importResumeFile(file: Express.Multer.File, options: ImportOptions) {
     const rawText = await this.extractText(file);
-    const parsed = this.parseResume(rawText, file.originalname);
+    const parsed = parseResumeText(rawText, file.originalname);
     const sourceId = await this.ensureSource('file_import', 'Импорт файла');
     const candidateId = await this.upsertCandidate(parsed, sourceId);
     const attachmentId = await this.createAttachment(file, candidateId);
@@ -37,31 +40,28 @@ export class ImportsService {
   }
 
   private async extractText(file: Express.Multer.File) {
-    if (extname(file.originalname).toLowerCase() !== '.txt') {
-      return '';
+    const extension = extname(file.originalname).toLowerCase();
+    const buffer = await readFile(file.path);
+    if (extension === '.txt') return buffer.toString('utf8');
+    if (extension === '.docx') {
+      const result = await mammoth.extractRawText({ buffer });
+      return result.value;
     }
-
-    return readFile(file.path, 'utf8');
-  }
-
-  private parseResume(rawText: string, fileName: string) {
-    const lines = rawText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const email = rawText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || null;
-    const phone =
-      rawText.match(/(?:\+?\d[\s()-]*){10,}/)?.[0]?.replace(/\s+/g, ' ').trim() || null;
-    const skillsLine = lines.find((line) => /skills|навыки/i.test(line));
-    const fallbackName = basename(fileName, extname(fileName)).replace(/[_-]+/g, ' ');
-
-    return {
-      fullName: lines[0] && !lines[0].includes('@') ? lines[0] : fallbackName,
-      email,
-      phone,
-      skills: skillsLine?.replace(/skills|навыки|:/gi, '').trim() || null,
-      parserStatus: rawText ? 'parsed_text' : 'file_saved',
-    };
+    if (extension === '.pdf') {
+      const { extractText, getDocumentProxy } = await import('unpdf');
+      const pdf = await getDocumentProxy(new Uint8Array(buffer));
+      const result = await extractText(pdf, { mergePages: true });
+      return result.text;
+    }
+    if (extension === '.doc' && buffer.subarray(0, 5).toString('ascii') === '{\\rtf') {
+      return new Promise<string>((resolve, reject) => {
+        rtf2text.string(buffer.toString('latin1'), (error, text) => {
+          if (error) reject(error);
+          else resolve(text);
+        });
+      });
+    }
+    return '';
   }
 
   private async ensureSource(code: string, name: string) {
@@ -77,12 +77,7 @@ export class ImportsService {
   }
 
   private async upsertCandidate(
-    parsed: {
-      fullName: string;
-      email: string | null;
-      phone: string | null;
-      skills: string | null;
-    },
+    parsed: ParsedResume,
     sourceId: string,
   ) {
     if (parsed.email) {
@@ -98,9 +93,23 @@ export class ImportsService {
                phone = coalesce($3, phone),
                skills = coalesce($4, skills),
                source_id = coalesce(source_id, $5),
+               city = coalesce($6, city),
+               current_position = coalesce($7, current_position),
+               total_experience_months = coalesce($8, total_experience_months),
+               education = coalesce($9, education),
                updated_at = now()
            where id = $1`,
-          [existing.rows[0].id, parsed.fullName, parsed.phone, parsed.skills, sourceId],
+          [
+            existing.rows[0].id,
+            parsed.fullName,
+            parsed.phone,
+            parsed.skills,
+            sourceId,
+            parsed.city,
+            parsed.currentPosition,
+            parsed.totalExperienceMonths,
+            parsed.education,
+          ],
         );
         return existing.rows[0].id;
       }
@@ -108,11 +117,22 @@ export class ImportsService {
 
     const created = await this.databaseService.query<CandidateRecord>(
       `insert into candidates (
-        full_name, email, phone, skills, source_id, consent_personal_data
+        full_name, email, phone, city, current_position, total_experience_months,
+        education, skills, source_id, consent_personal_data
       )
-      values ($1, $2, $3, $4, $5, true)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
       returning id`,
-      [parsed.fullName, parsed.email, parsed.phone, parsed.skills, sourceId],
+      [
+        parsed.fullName,
+        parsed.email,
+        parsed.phone,
+        parsed.city,
+        parsed.currentPosition,
+        parsed.totalExperienceMonths,
+        parsed.education,
+        parsed.skills,
+        sourceId,
+      ],
     );
 
     return created.rows[0].id;
@@ -135,7 +155,7 @@ export class ImportsService {
     candidateId: string,
     attachmentId: string,
     rawText: string,
-    parsed: Record<string, unknown>,
+    parsed: ParsedResume,
   ) {
     const result = await this.databaseService.query<{ id: string }>(
       `insert into resumes (candidate_id, attachment_id, raw_text, parsed_data, parser_status)
@@ -185,4 +205,3 @@ export class ImportsService {
     return result.rows[0].id;
   }
 }
-
