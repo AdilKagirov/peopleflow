@@ -61,6 +61,25 @@ describe('PeopleFlow API (e2e)', () => {
       })
       .expect(201);
 
+    const startsAt = new Date(Date.now() + 86_400_000).toISOString();
+    const interview = await request(app.getHttpServer())
+      .post('/api/interviews')
+      .send({
+        applicationId: application.body.id,
+        interviewTypeCode: 'manager',
+        startsAt,
+        location: 'E2E meeting room',
+      })
+      .expect(201);
+    expect(interview.body.applicationId).toBe(application.body.id);
+    expect(interview.body.candidate.id).toBe(candidateId);
+
+    const interviews = await request(app.getHttpServer())
+      .get(`/api/interviews?applicationId=${application.body.id}`)
+      .expect(200);
+    expect(interviews.body).toHaveLength(1);
+    expect(interviews.body[0].vacancy.id).toBe(vacancies.body[0].id);
+
     const customerApproval = await request(app.getHttpServer())
       .post(`/api/approvals/applications/${application.body.id}`)
       .send({ type: 'customer', comment: 'E2E customer review' })
@@ -99,6 +118,6 @@ describe('PeopleFlow API (e2e)', () => {
     if (candidateId) {
       await request(app.getHttpServer()).delete(`/api/candidates/${candidateId}`);
     }
-    await app.close();
+    if (app) await app.close();
   });
 });

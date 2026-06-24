@@ -220,12 +220,13 @@ function render() {
 
 async function refreshFromApi() {
   try {
-    const [reference, vacancies, candidates, applications, approvals] = await Promise.all([
+    const [reference, vacancies, candidates, applications, approvals, interviews] = await Promise.all([
       apiFetch("/reference"),
       apiFetch("/vacancies"),
       apiFetch("/candidates"),
       apiFetch("/applications"),
       apiFetch("/approvals"),
+      apiFetch("/interviews"),
     ]);
 
     state.reference = reference;
@@ -235,9 +236,10 @@ async function refreshFromApi() {
       name: stage.name,
     }));
     state.vacancies = vacancies.map(mapApiVacancy);
-    state.candidates = candidates.map((candidate) => mapApiCandidate(candidate, applications));
+    state.candidates = candidates.map((candidate) => mapApiCandidate(candidate, applications, interviews));
     state.applications = applications;
     state.approvals = approvals;
+    state.interviews = interviews;
     saveState();
     syncReferenceFilters();
     render();
@@ -296,8 +298,9 @@ function mapApiVacancy(item) {
   };
 }
 
-function mapApiCandidate(item, applications = []) {
+function mapApiCandidate(item, applications = [], interviews = []) {
   const candidateApplications = applications.filter((entry) => entry.candidate.id === item.id);
+  const candidateInterviews = interviews.filter((entry) => entry.candidate.id === item.id);
   const application = candidateApplications[0];
   const vacancyTitles = candidateApplications.map((entry) => entry.vacancy.title);
   const stageNames = [...new Set(candidateApplications.map((entry) => entry.stage?.name).filter(Boolean))];
@@ -305,6 +308,7 @@ function mapApiCandidate(item, applications = []) {
     id: item.id,
     applicationId: application?.id || "",
     applications: candidateApplications,
+    interviews: candidateInterviews,
     vacancyIds: candidateApplications.map((entry) => entry.vacancy.id),
     name: item.fullName,
     contacts: [item.email, item.phone].filter(Boolean).join(", ") || "Контакты не указаны",
@@ -321,7 +325,7 @@ function mapApiCandidate(item, applications = []) {
     notes: application?.summary || "",
     rating: application?.rating || "3",
     history: application ? `Отклик: ${application.status.name}` : "Профиль кандидата",
-    interviewAt: "",
+    interviewAt: candidateInterviews.find((entry) => entry.status === "planned")?.startsAt || "",
   };
 }
 
@@ -339,22 +343,21 @@ function dateOnly(value) {
 
 function renderDashboard() {
   const openVacancies = state.vacancies.filter((item) => item.status === "Открыта").length;
-  const interviews = state.candidates.filter((item) => item.interviewAt).length;
+  const interviews = (state.interviews || []).filter((item) => item.status === "planned");
   const pendingApprovals = (state.approvals || []).filter((item) => item.status === "pending");
   $("#metrics").innerHTML = [
     ["Открытые вакансии", openVacancies],
     ["Кандидаты в базе", state.candidates.length],
-    ["Запланированные интервью", interviews],
+    ["Запланированные интервью", interviews.length],
     ["На согласовании", pendingApprovals.length],
   ].map(metricCard).join("");
   $("#activeVacancies").innerHTML = state.vacancies
     .filter((item) => item.status === "Открыта")
     .map((item) => `<article class="list-item"><strong>${item.title}</strong><p class="muted">${item.department} · ${item.salary}</p></article>`)
     .join("") || empty("Нет открытых вакансий");
-  $("#upcomingInterviews").innerHTML = state.candidates
-    .filter((item) => item.interviewAt)
-    .sort((a, b) => a.interviewAt.localeCompare(b.interviewAt))
-    .map((item) => `<article class="list-item"><strong>${item.name}</strong><p class="muted">${formatDateTime(item.interviewAt)} · ${item.vacancyTitle}</p></article>`)
+  $("#upcomingInterviews").innerHTML = interviews
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+    .map((item) => `<article class="list-item"><strong>${item.candidate.name}</strong><p class="muted">${formatDateTime(item.startsAt)} · ${item.vacancy.title}</p></article>`)
     .join("") || empty("Интервью не запланированы");
   $("#pendingApprovals").innerHTML = pendingApprovals
     .map((item) => `<article class="list-item approval-dashboard-item">
@@ -800,6 +803,7 @@ function candidateForm(id) {
     field("name", "ФИО", item.name, true),
     field("contacts", "Контакты", item.contacts, true),
     candidateProcessesField(item.applications || []),
+    candidateInterviewsField(item.interviews || []),
     checkboxGroupField(
       "vacancyIds",
       "Вакансии кандидата",
@@ -813,7 +817,6 @@ function candidateForm(id) {
     selectField("stage", "Начальный этап для новых вакансий", getStageOptions().map((stage) => stage.name), newApplicationStage),
     field("appliedAt", "Дата отклика", item.appliedAt || today(), true, "date"),
     field("rating", "Оценка рекрутера", item.rating || "3", true, "number"),
-    field("interviewAt", "Дата интервью", item.interviewAt, false, "datetime-local"),
     field("tags", "Теги", item.tags),
     field("notes", "Заметки", item.notes, false, "textarea", true),
     field("history", "История коммуникаций", item.history, false, "textarea", true),
@@ -843,15 +846,53 @@ function candidateForm(id) {
 }
 
 function interviewForm() {
+  if (state.apiConnected && !state.applications?.length) {
+    alert("Сначала привяжите кандидата к вакансии.");
+    return;
+  }
+  const interviewOptions = state.apiConnected
+    ? state.applications.map((item) => `${item.id}|${item.candidate.name} — ${item.vacancy.title}`)
+    : state.candidates.map((item) => `${item.id}|${item.name} — ${item.vacancyTitle}`);
   openModal("Запланировать интервью", [
-    selectField("candidateId", "Кандидат", state.candidates.map((item) => `${item.id}|${item.name}`)),
-    field("interviewAt", "Дата и время", "", true, "datetime-local"),
-    field("comment", "Комментарий", "", false, "textarea", true),
-  ], (data) => {
-    const [id] = data.candidateId.split("|");
+    selectField(
+      "applicationId",
+      "Кандидат и вакансия",
+      interviewOptions,
+    ),
+    selectField("interviewTypeCode", "Тип интервью", [
+      "phone|Телефонное интервью",
+      "hr|HR интервью",
+      "manager|Интервью с руководителем",
+      "final|Финальное интервью",
+    ], "manager|Интервью с руководителем"),
+    field("startsAt", "Начало", "", true, "datetime-local"),
+    field("endsAt", "Окончание", "", false, "datetime-local"),
+    field("location", "Место или комментарий", "", false, "text", true),
+    field("meetingUrl", "Ссылка на встречу", "", false, "url", true),
+  ], async (data) => {
+    if (state.apiConnected) {
+      const [applicationId] = data.applicationId.split("|");
+      const [interviewTypeCode] = data.interviewTypeCode.split("|");
+      await apiFetch("/interviews", {
+        method: "POST",
+        body: JSON.stringify({
+          applicationId,
+          interviewTypeCode,
+          startsAt: new Date(data.startsAt).toISOString(),
+          endsAt: data.endsAt ? new Date(data.endsAt).toISOString() : null,
+          location: data.location || null,
+          meetingUrl: data.meetingUrl || null,
+          createdBy: currentUserId(),
+        }),
+      });
+      await refreshFromApi();
+      return;
+    }
+
+    const [id] = data.applicationId.split("|");
     const candidate = state.candidates.find((item) => item.id === id);
-    candidate.interviewAt = data.interviewAt;
-    candidate.history += `; интервью ${formatDateTime(data.interviewAt)} ${data.comment}`;
+    candidate.interviewAt = data.startsAt;
+    candidate.history += `; интервью ${formatDateTime(data.startsAt)} ${data.location}`;
     saveState();
     render();
   });
@@ -936,6 +977,21 @@ function candidateProcessesField(applications) {
     : `<span class="muted">Кандидат пока не привязан к вакансии</span>`;
   return `<section class="form-field full candidate-processes">
     <span class="field-title">Статусы по вакансиям</span>
+    <div>${rows}</div>
+  </section>`;
+}
+
+function candidateInterviewsField(interviews) {
+  if (!interviews.length) return "";
+  const rows = interviews.map((interview) => `<div class="candidate-process-row">
+    <div>
+      <strong>${formatDateTime(interview.startsAt)} · ${interview.type?.name || "Интервью"}</strong>
+      <span>${interview.vacancy.title}${interview.location ? ` · ${interview.location}` : ""}</span>
+    </div>
+    <span class="badge ${interview.status === "planned" ? "pause" : "neutral"}">${interview.status === "planned" ? "Запланировано" : interview.status}</span>
+  </div>`).join("");
+  return `<section class="form-field full candidate-processes">
+    <span class="field-title">Интервью</span>
     <div>${rows}</div>
   </section>`;
 }

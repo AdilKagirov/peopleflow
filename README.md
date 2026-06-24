@@ -60,10 +60,13 @@ http://localhost:3000/api/vacancies
 http://localhost:3000/api/candidates
 http://localhost:3000/api/applications
 http://localhost:3000/api/approvals
+http://localhost:3000/api/interviews
 http://localhost:3000/api/reference
 ```
 
 The health endpoint checks the PostgreSQL connection when the database container is running.
+
+Interview planning is stored in PostgreSQL and linked to a specific candidate application. Scheduled interviews remain available after a page refresh and are shown on the dashboard and in the candidate profile.
 
 Delete an imported candidate:
 

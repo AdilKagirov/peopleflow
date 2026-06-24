@@ -151,6 +151,11 @@ paths:
         "201":
           description: Approval decision saved
   /interviews:
+    get:
+      summary: List scheduled interviews
+      responses:
+        "200":
+          description: Interview list
     post:
       summary: Schedule interview
       responses:
