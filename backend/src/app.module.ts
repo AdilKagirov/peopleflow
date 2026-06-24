@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApplicationsModule } from './applications/applications.module';
+import { ApprovalsModule } from './approvals/approvals.module';
 import { CandidatesModule } from './candidates/candidates.module';
 import { DatabaseModule } from './database/database.module';
 import { HhIntegrationModule } from './integrations/hh/hh-integration.module';
@@ -17,6 +18,7 @@ import { VacanciesModule } from './vacancies/vacancies.module';
     VacanciesModule,
     CandidatesModule,
     ApplicationsModule,
+    ApprovalsModule,
     ReferenceModule,
     ImportsModule,
     HhIntegrationModule,

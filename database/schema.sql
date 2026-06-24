@@ -184,6 +184,29 @@ CREATE INDEX applications_vacancy_idx ON applications (vacancy_id);
 CREATE INDEX applications_candidate_idx ON applications (candidate_id);
 CREATE INDEX applications_stage_idx ON applications (current_stage_id);
 
+CREATE TABLE approval_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  application_id uuid NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+  approval_type text NOT NULL CHECK (approval_type IN ('customer', 'security')),
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+  assigned_role text NOT NULL,
+  assigned_to uuid REFERENCES users(id),
+  requested_by uuid REFERENCES users(id),
+  decided_by uuid REFERENCES users(id),
+  previous_stage_id uuid REFERENCES pipeline_stages(id),
+  request_comment text,
+  decision_comment text,
+  requested_at timestamptz NOT NULL DEFAULT now(),
+  decided_at timestamptz,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX approval_requests_application_idx ON approval_requests (application_id, requested_at DESC);
+CREATE INDEX approval_requests_queue_idx ON approval_requests (assigned_role, status, requested_at);
+CREATE UNIQUE INDEX approval_requests_one_pending_idx
+  ON approval_requests (application_id, approval_type)
+  WHERE status = 'pending';
+
 CREATE TABLE application_stage_history (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   application_id uuid NOT NULL REFERENCES applications(id) ON DELETE CASCADE,

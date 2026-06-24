@@ -1,7 +1,7 @@
 const stages = ["Резюме", "Телефонное интервью", "Собеседование", "Тестовое задание", "Проверка рекомендаций", "Финал"];
 const vacancyStatuses = ["Открыта", "Приостановлена", "Закрыта", "Заполнена"];
-const roles = ["Администратор", "Рекрутер", "Менеджер по найму", "HR филиала"];
-const permissions = ["Просмотр", "Редактирование", "Создание", "Кандидаты", "Аналитика"];
+const roles = ["Администратор", "Рекрутер", "Заказчик", "Служба безопасности", "HR филиала"];
+const permissions = ["Просмотр", "Редактирование", "Создание", "Кандидаты", "Согласование", "Аналитика"];
 const API_BASE = "http://localhost:3000/api";
 
 const demo = {
@@ -119,9 +119,10 @@ const demo = {
     },
   ],
   rolePermissions: {
-    "Администратор": ["Просмотр", "Редактирование", "Создание", "Кандидаты", "Аналитика"],
-    "Рекрутер": ["Просмотр", "Редактирование", "Создание", "Кандидаты"],
-    "Менеджер по найму": ["Просмотр", "Кандидаты", "Аналитика"],
+    "Администратор": ["Просмотр", "Редактирование", "Создание", "Кандидаты", "Согласование", "Аналитика"],
+    "Рекрутер": ["Просмотр", "Редактирование", "Создание", "Кандидаты", "Согласование"],
+    "Заказчик": ["Просмотр", "Кандидаты", "Согласование", "Аналитика"],
+    "Служба безопасности": ["Просмотр", "Согласование"],
     "HR филиала": ["Просмотр", "Создание", "Кандидаты"],
   },
 };
@@ -132,7 +133,23 @@ const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
 function loadState() {
   const saved = localStorage.getItem("peopleflow-state");
-  return saved ? JSON.parse(saved) : structuredClone(demo);
+  if (!saved) return structuredClone(demo);
+  const parsed = JSON.parse(saved);
+  return {
+    ...structuredClone(demo),
+    ...parsed,
+    role: parsed.role === "Менеджер по найму" ? "Заказчик" : parsed.role,
+    rolePermissions: mergeRolePermissions(parsed.rolePermissions || {}),
+  };
+}
+
+function mergeRolePermissions(savedPermissions) {
+  return roles.reduce((result, role) => {
+    const defaults = demo.rolePermissions[role] || [];
+    const saved = savedPermissions[role] || [];
+    result[role] = [...new Set([...defaults, ...saved])];
+    return result;
+  }, {});
 }
 
 function saveState() {
@@ -163,6 +180,9 @@ function init() {
   $("#vacancyStatusFilter").addEventListener("change", renderVacancies);
   $("#candidateSearch").addEventListener("input", renderCandidates);
   $("#candidateStageFilter").addEventListener("change", renderCandidates);
+  $("#approvalTypeFilter").addEventListener("change", renderApprovals);
+  $("#approvalStatusFilter").addEventListener("change", renderApprovals);
+  $("#refreshApprovals").addEventListener("click", refreshFromApi);
   $("#resumeImport").addEventListener("change", importResume);
   $("#addInterview").addEventListener("click", () => interviewForm());
   $("#sendMessage").addEventListener("click", () => messageForm());
@@ -191,6 +211,7 @@ function render() {
   renderVacancies();
   renderCandidates();
   renderPipeline();
+  renderApprovals();
   renderMessages();
   renderReports();
   renderRoles();
@@ -198,11 +219,12 @@ function render() {
 
 async function refreshFromApi() {
   try {
-    const [reference, vacancies, candidates, applications] = await Promise.all([
+    const [reference, vacancies, candidates, applications, approvals] = await Promise.all([
       apiFetch("/reference"),
       apiFetch("/vacancies"),
       apiFetch("/candidates"),
       apiFetch("/applications"),
+      apiFetch("/approvals"),
     ]);
 
     state.reference = reference;
@@ -214,6 +236,7 @@ async function refreshFromApi() {
     state.vacancies = vacancies.map(mapApiVacancy);
     state.candidates = candidates.map((candidate) => mapApiCandidate(candidate, applications));
     state.applications = applications;
+    state.approvals = approvals;
     saveState();
     syncReferenceFilters();
     render();
@@ -374,6 +397,7 @@ function renderCandidates() {
   $("#candidatesList").innerHTML = items.length ? candidateList(items) : empty("Кандидаты не найдены");
   $$(".edit-candidate").forEach((button) => button.addEventListener("click", () => candidateForm(button.dataset.id)));
   $$(".delete-candidate").forEach((button) => button.addEventListener("click", () => deleteCandidate(button.dataset.id)));
+  $$(".request-approval").forEach((button) => button.addEventListener("click", () => requestApproval(button.dataset.id, button.dataset.type)));
 }
 
 function candidateList(items) {
@@ -381,6 +405,12 @@ function candidateList(items) {
 }
 
 function candidateRow(item) {
+  const workflowActions = item.applicationId && canRequestApproval()
+    ? `<div class="record-workflow-actions">
+        <button class="workflow-button request-approval" data-id="${item.applicationId}" data-type="customer">Заказчику</button>
+        <button class="workflow-button request-approval" data-id="${item.applicationId}" data-type="security">В СБ</button>
+      </div>`
+    : "";
   return `<article class="record-row">
     <div class="record-main">
       <div class="record-title">
@@ -394,6 +424,7 @@ function candidateRow(item) {
         <span>${item.skills || "—"}</span>
         <span>${item.appliedAt || "—"}</span>
       </div>
+      ${workflowActions}
     </div>
     <div class="record-actions">
       <button class="ghost edit-candidate" data-id="${item.id}" ${can("Кандидаты") ? "" : "disabled"}>Профиль</button>
@@ -464,6 +495,119 @@ function pipelineCard(item) {
       ${getStageOptions().map((stage) => `<option ${stage.name === item.stage ? "selected" : ""}>${stage.name}</option>`).join("")}
     </select>
   </article>`;
+}
+
+function renderApprovals() {
+  const approvals = state.approvals || [];
+  const roleType = state.role === "Заказчик"
+    ? "customer"
+    : state.role === "Служба безопасности"
+      ? "security"
+      : "";
+  const type = $("#approvalTypeFilter")?.value || roleType;
+  const status = $("#approvalStatusFilter")?.value || "";
+  const filtered = approvals.filter((item) =>
+    (!type || item.type === type) && (!status || item.status === status)
+  );
+
+  const pending = approvals.filter((item) => item.status === "pending");
+  $("#approvalSummary").innerHTML = [
+    ["Ожидают заказчика", pending.filter((item) => item.type === "customer").length],
+    ["Ожидают СБ", pending.filter((item) => item.type === "security").length],
+    ["Одобрено", approvals.filter((item) => item.status === "approved").length],
+    ["Отклонено", approvals.filter((item) => item.status === "rejected").length],
+  ].map(metricCard).join("");
+
+  $("#approvalsList").innerHTML = filtered.length
+    ? `<div class="record-list">${filtered.map(approvalRow).join("")}</div>`
+    : empty("В этой очереди согласований пока нет");
+
+  $$(".approval-decision").forEach((button) => button.addEventListener("click", () => decideApproval(button.dataset.id, button.dataset.decision)));
+}
+
+function approvalRow(item) {
+  const canDecide = item.status === "pending" && canDecideApproval(item.type);
+  const statusLabel = {
+    pending: "Ожидает решения",
+    approved: "Одобрено",
+    rejected: "Отклонено",
+  }[item.status] || item.status;
+  const statusClass = item.status === "approved" ? "open" : item.status === "rejected" ? "closed" : "pause";
+  return `<article class="record-row approval-row">
+    <div class="record-main">
+      <div class="record-title">
+        <strong>${item.candidate.name}</strong>
+        <span class="badge ${statusClass}">${statusLabel}</span>
+        <span class="tag">${item.typeName}</span>
+      </div>
+      <div class="record-details">
+        <span>${item.vacancy.title}</span>
+        <span>${item.candidate.email || "Email не указан"}</span>
+        <span>${item.currentStage?.name || "Этап не указан"}</span>
+        <span>${formatDateTime(item.requestedAt)}</span>
+        <span>${item.requestComment || item.decisionComment || "Без комментария"}</span>
+      </div>
+    </div>
+    <div class="record-actions">
+      ${canDecide ? `
+        <button class="approve approval-decision" data-id="${item.id}" data-decision="approved">Одобрить</button>
+        <button class="danger approval-decision" data-id="${item.id}" data-decision="rejected">Отклонить</button>
+      ` : `<span class="muted">${item.decidedBy?.name || item.assignedTo?.name || "Назначено роли"}</span>`}
+    </div>
+  </article>`;
+}
+
+function canRequestApproval() {
+  return ["Администратор", "Рекрутер"].includes(state.role) && can("Согласование");
+}
+
+function canDecideApproval(type) {
+  if (state.role === "Администратор") return true;
+  return (type === "customer" && state.role === "Заказчик") ||
+    (type === "security" && state.role === "Служба безопасности");
+}
+
+async function requestApproval(applicationId, type) {
+  if (!state.apiConnected) {
+    alert("Для согласования должен быть запущен backend.");
+    return;
+  }
+  const label = type === "customer" ? "заказчику" : "в службу безопасности";
+  const comment = prompt(`Комментарий при отправке ${label}`, "Прошу согласовать кандидата");
+  if (comment === null) return;
+  try {
+    await apiFetch(`/approvals/applications/${applicationId}`, {
+      method: "POST",
+      body: JSON.stringify({
+        type,
+        requestedBy: currentUserId(),
+        comment,
+      }),
+    });
+    await refreshFromApi();
+    switchView("approvals");
+  } catch (error) {
+    alert(`Не удалось отправить на согласование: ${error.message}`);
+  }
+}
+
+async function decideApproval(id, decision) {
+  const label = decision === "approved" ? "Одобрить кандидата" : "Отклонить кандидата";
+  const comment = prompt(label + ". Укажите комментарий:", "");
+  if (comment === null) return;
+  try {
+    await apiFetch(`/approvals/${id}/decision`, {
+      method: "POST",
+      body: JSON.stringify({ decision, decidedBy: currentUserId(), comment }),
+    });
+    await refreshFromApi();
+  } catch (error) {
+    alert(`Не удалось сохранить решение: ${error.message}`);
+  }
+}
+
+function currentUserId() {
+  return state.reference?.users?.[0]?.id || null;
 }
 
 function renderMessages() {

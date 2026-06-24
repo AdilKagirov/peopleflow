@@ -10,6 +10,7 @@ export class AppService {
         'vacancies',
         'candidates',
         'applications',
+        'approvals',
         'pipeline',
         'interviews',
         'communications',

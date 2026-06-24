@@ -214,6 +214,43 @@ textarea { min-height: 86px; resize: vertical; }
   min-width: 82px;
   padding: 0 10px;
 }
+.record-workflow-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.workflow-button,
+.approve {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.workflow-button {
+  color: var(--primary-dark);
+  background: #e7f3f7;
+  border: 1px solid #bddce5;
+}
+.approve {
+  color: #fff;
+  background: var(--green);
+}
+.approval-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.approval-summary .metric {
+  padding: 12px;
+  box-shadow: none;
+}
+.approval-summary .metric strong {
+  font-size: 22px;
+}
+.approval-row .record-actions {
+  min-width: 190px;
+}
 .card, .list-item {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -308,6 +345,9 @@ dialog::backdrop { background: rgba(16, 44, 59, 0.45); }
   .record-details {
     grid-template-columns: repeat(2, minmax(120px, 1fr));
   }
+  .approval-summary {
+    grid-template-columns: repeat(2, minmax(130px, 1fr));
+  }
 }
 @media (max-width: 640px) {
   .app { padding: 18px; }
@@ -324,6 +364,9 @@ dialog::backdrop { background: rgba(16, 44, 59, 0.45); }
   }
   .record-details span {
     max-width: 100%;
+  }
+  .approval-summary {
+    grid-template-columns: 1fr;
   }
 }
 @media print {

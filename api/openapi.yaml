@@ -113,6 +113,33 @@ paths:
       responses:
         "200":
           description: Application moved
+  /approvals:
+    get:
+      summary: List candidate approval requests
+      responses:
+        "200":
+          description: Approval queue
+  /approvals/applications/{applicationId}:
+    post:
+      summary: Send candidate to customer or security approval
+      parameters:
+        - in: path
+          name: applicationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "201":
+          description: Approval requested
+  /approvals/{id}/decision:
+    post:
+      summary: Approve or reject candidate
+      parameters:
+        - $ref: "#/components/parameters/Id"
+      responses:
+        "201":
+          description: Approval decision saved
   /interviews:
     post:
       summary: Schedule interview

@@ -59,6 +59,7 @@ http://localhost:3000/api/health
 http://localhost:3000/api/vacancies
 http://localhost:3000/api/candidates
 http://localhost:3000/api/applications
+http://localhost:3000/api/approvals
 http://localhost:3000/api/reference
 ```
 
@@ -71,6 +72,31 @@ curl -X DELETE http://localhost:3000/api/candidates/<candidateId>
 ```
 
 Candidate applications and resume rows are removed by database cascade. Imported candidate attachments and local uploaded files are also cleaned up by the API.
+
+## Candidate Approval Workflow
+
+Apply pending database migrations after pulling changes:
+
+```bash
+cd /Users/adilkagirov/Documents/hr/backend
+npm run db:migrate
+```
+
+Workflow:
+
+```text
+Recruiter -> Customer approval -> Customer interview -> Security check -> Recruiter follow-up
+```
+
+API:
+
+```text
+GET  /api/approvals
+POST /api/approvals/applications/:applicationId
+POST /api/approvals/:id/decision
+```
+
+The frontend provides an `Approvals` page. Recruiters send a candidate to the customer or security, while the Customer and Security roles receive their own decision queues.
 
 ## Resume And HH Imports
 

@@ -20,6 +20,7 @@
         <button class="nav-item" data-view="vacancies">Вакансии</button>
         <button class="nav-item" data-view="candidates">Кандидаты</button>
         <button class="nav-item" data-view="pipeline">Этапы</button>
+        <button class="nav-item" data-view="approvals">Согласования</button>
         <button class="nav-item" data-view="messages">Коммуникации</button>
         <button class="nav-item" data-view="reports">Отчеты</button>
         <button class="nav-item" data-view="settings">Роли</button>
@@ -98,6 +99,33 @@
             <button class="ghost" id="addInterview">Запланировать интервью</button>
           </div>
           <div id="pipelineBoard" class="pipeline"></div>
+        </section>
+      </section>
+
+      <section class="view" id="approvalsView">
+        <section class="panel full">
+          <div class="section-head">
+            <div>
+              <h2>Согласования кандидатов</h2>
+              <p class="muted">Очереди заказчика и службы безопасности</p>
+            </div>
+            <button class="ghost" id="refreshApprovals">Обновить</button>
+          </div>
+          <div class="approval-summary" id="approvalSummary"></div>
+          <div class="toolbar">
+            <select id="approvalTypeFilter">
+              <option value="">Все маршруты</option>
+              <option value="customer">Заказчик</option>
+              <option value="security">Служба безопасности</option>
+            </select>
+            <select id="approvalStatusFilter">
+              <option value="">Все статусы</option>
+              <option value="pending">Ожидает решения</option>
+              <option value="approved">Одобрено</option>
+              <option value="rejected">Отклонено</option>
+            </select>
+          </div>
+          <div id="approvalsList"></div>
         </section>
       </section>
 

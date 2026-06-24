@@ -14,6 +14,7 @@ INSERT INTO roles (code, name, description) VALUES
   ('admin', 'Администратор', 'Полный доступ к системе'),
   ('recruiter', 'Рекрутер', 'Ведение вакансий, кандидатов и коммуникаций'),
   ('hiring_manager', 'Менеджер по найму', 'Просмотр кандидатов и оценка интервью'),
+  ('security', 'Служба безопасности', 'Проверка и согласование кандидатов'),
   ('branch_hr', 'HR филиала', 'Работа с вакансиями и кандидатами филиала')
 ON CONFLICT (code) DO NOTHING;
 
@@ -25,6 +26,9 @@ INSERT INTO permissions (code, name) VALUES
   ('candidate.create', 'Создание кандидатов'),
   ('candidate.edit', 'Редактирование кандидатов'),
   ('application.move', 'Перемещение по этапам'),
+  ('approval.view', 'Просмотр согласований'),
+  ('approval.request', 'Отправка кандидата на согласование'),
+  ('approval.decide', 'Принятие решения по согласованию'),
   ('interview.manage', 'Управление интервью'),
   ('communication.send', 'Отправка писем'),
   ('report.view', 'Просмотр отчетов'),
@@ -61,6 +65,20 @@ SELECT r.id, p.id
 FROM roles r
 JOIN permissions p ON p.code IN ('vacancy.view', 'vacancy.create', 'candidate.view', 'candidate.create', 'candidate.edit', 'application.move')
 WHERE r.code = 'branch_hr'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.code IN ('approval.view', 'approval.request')
+WHERE r.code = 'recruiter'
+ON CONFLICT DO NOTHING;
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id
+FROM roles r
+JOIN permissions p ON p.code IN ('approval.view', 'approval.decide')
+WHERE r.code IN ('hiring_manager', 'security')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO vacancy_statuses (code, name, sort_order) VALUES
@@ -102,9 +120,13 @@ FROM pipeline_templates t
 CROSS JOIN (VALUES
   ('resume_review', 'Рассмотрение резюме', 10, false),
   ('phone_screen', 'Телефонное интервью', 20, false),
+  ('customer_review', 'Согласование заказчиком', 25, false),
   ('onsite_interview', 'Личное собеседование', 30, false),
+  ('customer_interview', 'Интервью с заказчиком', 35, false),
   ('test_task', 'Тестовое задание', 40, false),
   ('reference_check', 'Проверка рекомендаций', 50, false),
+  ('security_check', 'Проверка СБ', 55, false),
+  ('recruiter_followup', 'Возвращен рекрутеру', 58, false),
   ('final_interview', 'Финальное интервью', 60, false),
   ('offer', 'Оффер', 70, false),
   ('hired', 'Принят', 80, true),
