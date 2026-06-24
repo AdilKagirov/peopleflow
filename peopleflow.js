@@ -334,43 +334,34 @@ function renderVacancies() {
     const haystack = `${item.title} ${item.department} ${item.position}`.toLowerCase();
     return haystack.includes(query) && (!status || item.status === status);
   });
-  $("#vacanciesList").innerHTML = items.length ? vacancyTable(items) : empty("Вакансии не найдены");
+  $("#vacanciesList").innerHTML = items.length ? vacancyList(items) : empty("Вакансии не найдены");
   $$(".edit-vacancy").forEach((button) => button.addEventListener("click", () => vacancyForm(button.dataset.id)));
 }
 
-function vacancyTable(items) {
-  return `<div class="data-table-wrap"><table class="data-table">
-    <thead>
-      <tr>
-        <th>Вакансия</th>
-        <th>Отдел</th>
-        <th>Статус</th>
-        <th>Тип</th>
-        <th>Зарплата</th>
-        <th>Публикация</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>${items.map(vacancyRow).join("")}</tbody>
-  </table></div>`;
+function vacancyList(items) {
+  return `<div class="record-list">${items.map(vacancyRow).join("")}</div>`;
 }
 
 function vacancyRow(item) {
   const badgeClass = statusBadgeClass(item.status);
-  return `<tr>
-    <td>
-      <strong>${item.title}</strong>
-      <span class="muted table-subtext">${item.position}</span>
-    </td>
-    <td>${item.department}</td>
-    <td><span class="badge ${badgeClass}">${item.status}</span></td>
-    <td>${item.employment}</td>
-    <td>${item.salary}</td>
-    <td><span class="muted">${item.publishedAt || "—"} · ${item.closedAt || "—"}</span></td>
-    <td class="table-actions">
+  return `<article class="record-row">
+    <div class="record-main">
+      <div class="record-title">
+        <strong>${item.title}</strong>
+        <span class="badge ${badgeClass}">${item.status}</span>
+      </div>
+      <div class="record-details">
+        <span>${item.position}</span>
+        <span>${item.department}</span>
+        <span>${item.employment}</span>
+        <span>${item.salary}</span>
+        <span>${item.publishedAt || "—"} · ${item.closedAt || "—"}</span>
+      </div>
+    </div>
+    <div class="record-actions">
       <button class="ghost edit-vacancy" data-id="${item.id}" ${can("Редактирование") ? "" : "disabled"}>Редактировать</button>
-    </td>
-  </tr>`;
+    </div>
+  </article>`;
 }
 
 function renderCandidates() {
@@ -380,44 +371,35 @@ function renderCandidates() {
     const haystack = `${item.name} ${item.contacts} ${item.skills} ${item.tags}`.toLowerCase();
     return haystack.includes(query) && (!stage || item.stage === stage);
   });
-  $("#candidatesList").innerHTML = items.length ? candidateTable(items) : empty("Кандидаты не найдены");
+  $("#candidatesList").innerHTML = items.length ? candidateList(items) : empty("Кандидаты не найдены");
   $$(".edit-candidate").forEach((button) => button.addEventListener("click", () => candidateForm(button.dataset.id)));
   $$(".delete-candidate").forEach((button) => button.addEventListener("click", () => deleteCandidate(button.dataset.id)));
 }
 
-function candidateTable(items) {
-  return `<div class="data-table-wrap"><table class="data-table">
-    <thead>
-      <tr>
-        <th>Кандидат</th>
-        <th>Вакансия</th>
-        <th>Этап</th>
-        <th>Источник</th>
-        <th>Навыки</th>
-        <th>Дата</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>${items.map(candidateRow).join("")}</tbody>
-  </table></div>`;
+function candidateList(items) {
+  return `<div class="record-list">${items.map(candidateRow).join("")}</div>`;
 }
 
 function candidateRow(item) {
-  return `<tr>
-    <td>
-      <strong>${item.name}</strong>
-      <span class="muted table-subtext">${item.contacts}</span>
-    </td>
-    <td>${item.vacancyTitle}</td>
-    <td><span class="badge open">${item.stage}</span></td>
-    <td>${item.source}</td>
-    <td><span class="muted">${item.skills || "—"}</span></td>
-    <td><span class="muted">${item.appliedAt || "—"}</span></td>
-    <td class="table-actions">
+  return `<article class="record-row">
+    <div class="record-main">
+      <div class="record-title">
+        <strong>${item.name}</strong>
+        <span class="badge open">${item.stage}</span>
+      </div>
+      <div class="record-details">
+        <span>${item.contacts}</span>
+        <span>${item.vacancyTitle}</span>
+        <span>${item.source}</span>
+        <span>${item.skills || "—"}</span>
+        <span>${item.appliedAt || "—"}</span>
+      </div>
+    </div>
+    <div class="record-actions">
       <button class="ghost edit-candidate" data-id="${item.id}" ${can("Кандидаты") ? "" : "disabled"}>Профиль</button>
       <button class="danger delete-candidate" data-id="${item.id}" ${can("Кандидаты") ? "" : "disabled"}>Удалить</button>
-    </td>
-  </tr>`;
+    </div>
+  </article>`;
 }
 
 function statusBadgeClass(status) {
