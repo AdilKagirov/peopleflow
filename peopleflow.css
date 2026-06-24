@@ -148,6 +148,53 @@ textarea { min-height: 86px; resize: vertical; }
   gap: 14px;
 }
 .grid-list.compact { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.data-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.data-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+}
+.data-table th,
+.data-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+.data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--muted);
+  background: #f8fafc;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.data-table tbody tr:hover {
+  background: #f8fafc;
+}
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table-subtext {
+  display: block;
+  margin-top: 4px;
+}
+.table-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+.table-actions .ghost,
+.table-actions .danger {
+  min-height: 32px;
+  padding: 0 10px;
+}
 .card, .list-item {
   border: 1px solid var(--line);
   border-radius: 8px;
