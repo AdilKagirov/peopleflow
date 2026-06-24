@@ -434,6 +434,7 @@ function renderCandidates() {
   $$(".edit-candidate").forEach((button) => button.addEventListener("click", () => candidateForm(button.dataset.id)));
   $$(".delete-candidate").forEach((button) => button.addEventListener("click", () => deleteCandidate(button.dataset.id)));
   $$(".request-approval").forEach((button) => button.addEventListener("click", () => requestApproval(button.dataset.id, button.dataset.type)));
+  $$(".assign-and-request").forEach((button) => button.addEventListener("click", () => assignCandidateAndRequest(button.dataset.id)));
 }
 
 function matchesCandidateApproval(candidate, filter) {
@@ -461,7 +462,14 @@ function candidateRow(item) {
     : item.stage;
   const workflowActions = item.applications?.length
     ? `<div class="application-workflows">${item.applications.map(applicationWorkflowRow).join("")}</div>`
-    : "";
+    : canRequestApproval()
+      ? `<div class="application-workflows">
+          <div class="record-workflow-actions">
+            <span class="badge neutral">Без вакансии</span>
+            <button class="workflow-button assign-and-request" data-id="${item.id}" ${state.vacancies.length ? "" : "disabled"}>Выбрать вакансию и отправить</button>
+          </div>
+        </div>`
+      : "";
   return `<article class="record-row">
     <div class="record-main">
       <div class="record-title">
@@ -715,6 +723,45 @@ async function requestApproval(applicationId, type) {
   } catch (error) {
     alert(`Не удалось отправить на согласование: ${error.message}`);
   }
+}
+
+function assignCandidateAndRequest(candidateId) {
+  const candidate = state.candidates.find((item) => item.id === candidateId);
+  if (!candidate || !state.vacancies.length) {
+    alert("Сначала создайте вакансию.");
+    return;
+  }
+  openModal("Отправить кандидата заказчику", [
+    selectField(
+      "vacancyId",
+      "Вакансия",
+      state.vacancies.map((vacancy) => `${vacancy.id}|${vacancy.title}`),
+    ),
+    field("comment", "Комментарий заказчику", "Прошу согласовать кандидата", true, "textarea", true),
+  ], async (data) => {
+    const [vacancyId] = data.vacancyId.split("|");
+    const source = state.reference?.sources?.find((item) => item.name === candidate.source);
+    const application = await apiFetch("/applications", {
+      method: "POST",
+      body: JSON.stringify({
+        vacancyId,
+        candidateId,
+        sourceCode: source?.code || "manual",
+        stageCode: "resume_review",
+        appliedAt: new Date().toISOString(),
+      }),
+    });
+    await apiFetch(`/approvals/applications/${application.id}`, {
+      method: "POST",
+      body: JSON.stringify({
+        type: "customer",
+        requestedBy: currentUserId(),
+        comment: data.comment,
+      }),
+    });
+    await refreshFromApi();
+    switchView("approvals");
+  });
 }
 
 async function decideApproval(id, decision) {
