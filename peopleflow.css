@@ -148,15 +148,20 @@ textarea { min-height: 86px; resize: vertical; }
   gap: 14px;
 }
 .grid-list.compact { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+#vacanciesList,
+#candidatesList {
+  display: block;
+}
 .record-list {
+  width: 100%;
   display: grid;
   gap: 8px;
 }
 .record-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 210px;
   gap: 16px;
-  align-items: center;
+  align-items: start;
   min-height: 76px;
   padding: 12px 14px;
   border: 1px solid var(--line);
@@ -174,21 +179,24 @@ textarea { min-height: 86px; resize: vertical; }
   align-items: center;
   gap: 8px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 .record-title strong {
+  max-width: min(520px, 100%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .record-details {
-  display: flex;
-  gap: 8px 14px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 6px 14px;
   color: var(--muted);
   font-size: 13px;
 }
 .record-details span {
-  max-width: 260px;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -196,12 +204,14 @@ textarea { min-height: 86px; resize: vertical; }
 .record-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   white-space: nowrap;
 }
 .record-actions .ghost,
 .record-actions .danger {
   min-height: 34px;
+  min-width: 82px;
   padding: 0 10px;
 }
 .card, .list-item {
@@ -292,6 +302,12 @@ dialog::backdrop { background: rgba(16, 44, 59, 0.45); }
   .sidebar { min-height: auto; }
   .nav { grid-template-columns: repeat(3, 1fr); }
   .metrics, .split { grid-template-columns: 1fr; }
+  .record-row {
+    grid-template-columns: minmax(0, 1fr) 190px;
+  }
+  .record-details {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
 }
 @media (max-width: 640px) {
   .app { padding: 18px; }
