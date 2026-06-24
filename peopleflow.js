@@ -3,6 +3,12 @@ const vacancyStatuses = ["Открыта", "Приостановлена", "За
 const roles = ["Администратор", "Рекрутер", "Заказчик", "Служба безопасности", "HR филиала"];
 const permissions = ["Просмотр", "Редактирование", "Создание", "Кандидаты", "Согласование", "Аналитика"];
 const API_BASE = "http://localhost:3000/api";
+const candidateDocumentRequirements = [
+  { type: "resume", name: "Резюме" },
+  { type: "candidate_questionnaire", name: "Анкета кандидата" },
+  { type: "security_questionnaire", name: "Анкета СБ" },
+  { type: "credit_bureau_report", name: "Полный отчет кредитного бюро" },
+];
 
 const demo = {
   role: "Администратор",
@@ -328,6 +334,7 @@ function mapApiCandidate(item, applications = [], interviews = []) {
     city: item.city || "",
     currentPosition: item.currentPosition || "",
     totalExperienceMonths: item.totalExperienceMonths,
+    documentTypes: item.documentTypes || [],
     experience: item.totalExperienceMonths ? `${Math.round(item.totalExperienceMonths / 12)} г.` : "не указано",
     education: item.education || "",
     skills: item.skills || "",
@@ -466,7 +473,7 @@ function candidateRow(item) {
       ? `<div class="application-workflows">
           <div class="record-workflow-actions">
             <span class="badge neutral">Без вакансии</span>
-            <button class="workflow-button assign-and-request" data-id="${item.id}" ${state.vacancies.length ? "" : "disabled"}>Выбрать вакансию и отправить</button>
+            <button class="workflow-button assign-and-request" data-id="${item.id}" ${state.vacancies.length && item.documentTypes?.includes("resume") ? "" : "disabled"}>${item.documentTypes?.includes("resume") ? "Выбрать вакансию и отправить" : "Сначала загрузите резюме"}</button>
           </div>
         </div>`
       : "";
@@ -497,13 +504,17 @@ function applicationWorkflowRow(application) {
   const status = getApplicationApprovalStatus(application.id);
   const customer = getLatestApproval(application.id, "customer");
   const security = getLatestApproval(application.id, "security");
+  const candidate = state.candidates.find((item) => item.id === application.candidate.id);
+  const documents = new Set(candidate?.documentTypes || []);
+  const hasResume = documents.has("resume");
+  const hasSecurityPackage = candidateDocumentRequirements.every((item) => documents.has(item.type));
   const canSendCustomer = canRequestApproval() && (!customer || customer.status === "rejected");
   const canSendSecurity = canRequestApproval() && customer?.status === "approved" && (!security || security.status === "rejected");
   return `<div class="record-workflow-actions">
     <span class="workflow-vacancy">${application.vacancy.title}</span>
     <span class="badge ${status.className}">${status.label}</span>
-    ${canSendCustomer ? `<button class="workflow-button request-approval" data-id="${application.id}" data-type="customer">Заказчику</button>` : ""}
-    ${canSendSecurity ? `<button class="workflow-button request-approval" data-id="${application.id}" data-type="security">В СБ</button>` : ""}
+    ${canSendCustomer ? `<button class="workflow-button request-approval" data-id="${application.id}" data-type="customer" ${hasResume ? "" : "disabled"}>${hasResume ? "Заказчику" : "Нужно резюме"}</button>` : ""}
+    ${canSendSecurity ? `<button class="workflow-button request-approval" data-id="${application.id}" data-type="security" ${hasSecurityPackage ? "" : "disabled"}>${hasSecurityPackage ? "В СБ" : "Нужны документы СБ"}</button>` : ""}
   </div>`;
 }
 
@@ -851,8 +862,15 @@ function vacancyForm(id) {
   });
 }
 
-function candidateForm(id) {
+async function candidateForm(id) {
   const item = state.candidates.find((candidate) => candidate.id === id) || {};
+  if (id && state.apiConnected) {
+    try {
+      item.documents = await apiFetch(`/candidates/${id}/documents`);
+    } catch {
+      item.documents = [];
+    }
+  }
   const newApplicationStage = item.applications?.length === 1
     ? item.applications[0].stage?.name
     : "Рассмотрение резюме";
@@ -864,6 +882,7 @@ function candidateForm(id) {
   openModal(id ? "Профиль кандидата" : "Новый кандидат", [
     field("name", "ФИО", item.name, true),
     field("contacts", "Контакты", item.contacts, true),
+    candidateDocumentsField(id, item.documents || []),
     candidateProcessesField(item.applications || []),
     candidateInterviewsField(item.interviews || []),
     checkboxGroupField(
@@ -907,6 +926,7 @@ function candidateForm(id) {
     saveState();
     render();
   });
+  bindCandidateDocumentControls(id);
 }
 
 function interviewForm() {
@@ -1058,6 +1078,87 @@ function candidateInterviewsField(interviews) {
     <span class="field-title">Интервью</span>
     <div>${rows}</div>
   </section>`;
+}
+
+function candidateDocumentsField(candidateId, documents) {
+  const checklist = candidateDocumentRequirements.map((requirement) => {
+    const files = documents.filter((document) => document.type === requirement.type);
+    const fileList = files.length
+      ? files.map((document) => `<div class="candidate-document-file">
+          <a href="${API_BASE}/candidates/${candidateId}/documents/${document.id}/download" target="_blank">${document.fileName}</a>
+          <span>${formatFileSize(document.fileSize)} · ${formatDateTime(document.uploadedAt)}</span>
+          <button type="button" class="icon-button delete-candidate-document" data-id="${document.id}" title="Удалить документ">×</button>
+        </div>`).join("")
+      : `<span class="muted">Файл не загружен</span>`;
+    return `<div class="candidate-document-row">
+      <div class="candidate-document-heading">
+        <strong>${requirement.name}</strong>
+        <span class="badge ${files.length ? "open" : "closed"}">${files.length ? "Загружено" : "Обязательно"}</span>
+      </div>
+      <div class="candidate-document-files">${fileList}</div>
+    </div>`;
+  }).join("");
+  const upload = candidateId
+    ? `<div class="candidate-document-upload">
+        <select id="candidateDocumentType">
+          ${candidateDocumentRequirements.map((item) => `<option value="${item.type}">${item.name}</option>`).join("")}
+        </select>
+        <input id="candidateDocumentFile" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" />
+        <button type="button" class="ghost" id="uploadCandidateDocument">Загрузить</button>
+      </div>`
+    : `<p class="muted">Сначала сохраните профиль, затем загрузите документы.</p>`;
+  return `<section class="form-field full candidate-documents">
+    <div class="candidate-documents-title">
+      <span class="field-title">Документы кандидата</span>
+      <span class="muted">Резюме обязательно для заказчика; весь комплект — для СБ</span>
+    </div>
+    <div class="candidate-document-list">${checklist}</div>
+    ${upload}
+  </section>`;
+}
+
+function bindCandidateDocumentControls(candidateId) {
+  if (!candidateId) return;
+  $("#uploadCandidateDocument")?.addEventListener("click", async () => {
+    const file = $("#candidateDocumentFile").files[0];
+    if (!file) {
+      alert("Выберите файл.");
+      return;
+    }
+    const button = $("#uploadCandidateDocument");
+    button.disabled = true;
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("documentType", $("#candidateDocumentType").value);
+      if (currentUserId()) form.append("uploadedBy", currentUserId());
+      await apiFetch(`/candidates/${candidateId}/documents`, { method: "POST", body: form });
+      $("#modal").close();
+      await refreshFromApi();
+      await candidateForm(candidateId);
+    } catch (error) {
+      alert(`Не удалось загрузить документ: ${error.message}`);
+      button.disabled = false;
+    }
+  });
+  $$(".delete-candidate-document").forEach((button) => button.addEventListener("click", async () => {
+    if (!confirm("Удалить этот документ из профиля кандидата?")) return;
+    try {
+      await apiFetch(`/candidates/${candidateId}/documents/${button.dataset.id}`, { method: "DELETE" });
+      $("#modal").close();
+      await refreshFromApi();
+      await candidateForm(candidateId);
+    } catch (error) {
+      alert(`Не удалось удалить документ: ${error.message}`);
+    }
+  }));
+}
+
+function formatFileSize(value) {
+  const size = Number(value || 0);
+  if (!size) return "0 Б";
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} КБ`;
+  return `${(size / 1024 / 1024).toFixed(1)} МБ`;
 }
 
 function getStageOptions() {

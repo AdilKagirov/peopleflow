@@ -305,11 +305,15 @@ CREATE TABLE attachments (
   owner_id uuid NOT NULL,
   file_name text NOT NULL,
   file_path text NOT NULL,
+  document_type text,
   mime_type text,
   file_size bigint,
   uploaded_by uuid REFERENCES users(id),
   uploaded_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE INDEX attachments_candidate_documents_idx
+  ON attachments (owner_type, owner_id, document_type, uploaded_at DESC);
 
 CREATE TABLE resumes (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -6,6 +6,12 @@ import {
 } from '@nestjs/common';
 import { QueryResultRow } from 'pg';
 import { DatabaseService } from '../database/database.service';
+import {
+  CandidateDocumentType,
+  candidateDocumentLabels,
+  customerRequiredDocuments,
+  securityRequiredDocuments,
+} from '../candidates/document-types';
 import { ApprovalDecisionDto } from './dto/approval-decision.dto';
 import { RequestApprovalDto } from './dto/request-approval.dto';
 
@@ -85,6 +91,7 @@ export class ApprovalsService {
     }
 
     const application = await this.getApplication(applicationId);
+    await this.ensureRequiredDocuments(application.candidate_id, dto.type);
     if (dto.type === 'security') {
       const customerApproved = await this.databaseService.query(
         `select 1 from approval_requests
@@ -221,9 +228,36 @@ export class ApprovalsService {
     const result = await this.databaseService.query<{
       id: string;
       current_stage_id: string | null;
-    }>('select id, current_stage_id from applications where id = $1', [id]);
+      candidate_id: string;
+    }>('select id, current_stage_id, candidate_id from applications where id = $1', [id]);
     if (!result.rows[0]) throw new NotFoundException('Application not found');
     return result.rows[0];
+  }
+
+  private async ensureRequiredDocuments(candidateId: string, type: 'customer' | 'security') {
+    const required = type === 'customer'
+      ? customerRequiredDocuments
+      : securityRequiredDocuments;
+    const result = await this.databaseService.query<{ document_type: CandidateDocumentType }>(
+      `select distinct document_type
+       from attachments
+       where owner_type = 'candidate' and owner_id = $1
+         and document_type = any($2::text[])`,
+      [candidateId, required],
+    );
+    const available = new Set(result.rows.map((row) => row.document_type));
+    const missing = required.filter((documentType) => !available.has(documentType));
+    if (missing.length) {
+      throw new BadRequestException({
+        message: type === 'customer'
+          ? 'Для отправки заказчику необходимо загрузить резюме'
+          : 'Для отправки в СБ необходимо загрузить полный комплект документов',
+        missingDocuments: missing.map((documentType) => ({
+          type: documentType,
+          name: candidateDocumentLabels[documentType],
+        })),
+      });
+    }
   }
 
   private async getApprovalRecord(id: string) {
@@ -275,4 +309,3 @@ export class ApprovalsService {
     return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
   }
 }
-

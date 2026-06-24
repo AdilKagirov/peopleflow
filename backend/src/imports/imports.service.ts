@@ -141,9 +141,9 @@ export class ImportsService {
   private async createAttachment(file: Express.Multer.File, candidateId: string) {
     const result = await this.databaseService.query<{ id: string }>(
       `insert into attachments (
-        owner_type, owner_id, file_name, file_path, mime_type, file_size
+        owner_type, owner_id, document_type, file_name, file_path, mime_type, file_size
       )
-      values ('candidate', $1, $2, $3, $4, $5)
+      values ('candidate', $1, 'resume', $2, $3, $4, $5)
       returning id`,
       [candidateId, file.originalname, file.path, file.mimetype, file.size],
     );

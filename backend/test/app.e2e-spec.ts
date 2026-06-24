@@ -80,6 +80,20 @@ describe('PeopleFlow API (e2e)', () => {
     expect(interviews.body).toHaveLength(1);
     expect(interviews.body[0].vacancy.id).toBe(vacancies.body[0].id);
 
+    await request(app.getHttpServer())
+      .post(`/api/approvals/applications/${application.body.id}`)
+      .send({ type: 'customer', comment: 'Missing resume' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .post(`/api/candidates/${candidateId}/documents`)
+      .field('documentType', 'resume')
+      .attach('file', Buffer.from('E2E resume'), {
+        filename: 'resume.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+
     const customerApproval = await request(app.getHttpServer())
       .post(`/api/approvals/applications/${application.body.id}`)
       .send({ type: 'customer', comment: 'E2E customer review' })
@@ -91,6 +105,31 @@ describe('PeopleFlow API (e2e)', () => {
       .send({ decision: 'approved', comment: 'Customer approved' })
       .expect(201);
     expect(customerDecision.body.currentStage.code).toBe('customer_interview');
+
+    await request(app.getHttpServer())
+      .post(`/api/approvals/applications/${application.body.id}`)
+      .send({ type: 'security', comment: 'Missing security documents' })
+      .expect(400);
+
+    for (const documentType of [
+      'candidate_questionnaire',
+      'security_questionnaire',
+      'credit_bureau_report',
+    ]) {
+      await request(app.getHttpServer())
+        .post(`/api/candidates/${candidateId}/documents`)
+        .field('documentType', documentType)
+        .attach('file', Buffer.from(`E2E ${documentType}`), {
+          filename: `${documentType}.pdf`,
+          contentType: 'application/pdf',
+        })
+        .expect(201);
+    }
+
+    const documents = await request(app.getHttpServer())
+      .get(`/api/candidates/${candidateId}/documents`)
+      .expect(200);
+    expect(documents.body).toHaveLength(4);
 
     const securityApproval = await request(app.getHttpServer())
       .post(`/api/approvals/applications/${application.body.id}`)

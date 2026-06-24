@@ -25,6 +25,7 @@ interface CandidateRow extends QueryResultRow {
   source_code: string | null;
   source_name: string | null;
   applications_count: number;
+  document_types: string[];
   created_at: string;
   updated_at: string;
 }
@@ -209,10 +210,16 @@ export class CandidatesService {
       c.education, c.skills, c.expected_salary, c.expected_salary_currency,
       c.consent_personal_data, c.created_at, c.updated_at,
       s.code as source_code, s.name as source_name,
-      count(a.id)::int as applications_count
+      count(distinct a.id)::int as applications_count,
+      coalesce(
+        array_agg(distinct att.document_type) filter (where att.document_type is not null),
+        '{}'::text[]
+      ) as document_types
     from candidates c
     left join sources s on s.id = c.source_id
-    left join applications a on a.candidate_id = c.id`;
+    left join applications a on a.candidate_id = c.id
+    left join attachments att
+      on att.owner_type = 'candidate' and att.owner_id = c.id`;
   }
 
   private mapCandidate(row: CandidateRow) {
@@ -234,6 +241,7 @@ export class CandidatesService {
       source: row.source_code ? { code: row.source_code, name: row.source_name } : null,
       consentPersonalData: row.consent_personal_data,
       applicationsCount: row.applications_count,
+      documentTypes: row.document_types,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };

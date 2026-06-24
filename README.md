@@ -133,6 +133,19 @@ optional field: vacancyId
 
 The implementation stores uploaded PDF/DOC/DOCX/TXT files, creates or updates a candidate, creates an attachment and resume record, and links the candidate to a vacancy only when `vacancyId` is explicitly selected. Text PDFs, DOCX files, TXT files, and RTF documents saved with a `.doc` extension are parsed automatically. The parser extracts the candidate name, contacts, city, desired position, experience, education, and skills. Scanned PDFs without a text layer and unsupported legacy binary DOC files are marked for manual review instead of using the filename as the candidate name.
 
+## Candidate Documents
+
+Every candidate profile keeps a versioned document checklist:
+
+```text
+Resume
+Candidate questionnaire
+Security questionnaire
+Full credit bureau report
+```
+
+A resume is required before a candidate can be sent to the customer. All four documents and an approved customer decision are required before a candidate can be sent to Security. These rules are enforced by the backend API as well as the frontend. Recruiters can upload, download, and remove document versions from the candidate profile.
+
 HH integration skeleton:
 
 ```text
