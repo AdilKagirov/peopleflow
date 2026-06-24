@@ -44,5 +44,9 @@ export class ReferenceController {
   getUsers() {
     return this.referenceService.getUsers();
   }
-}
 
+  @Get('branches')
+  getBranches() {
+    return this.referenceService.getBranches();
+  }
+}

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { QueryResultRow } from 'pg';
+import { AccessScopeService } from '../access/access-scope.service';
 import { compact, toNumber } from '../common/sql';
 import { DatabaseService } from '../database/database.service';
 import { CreateVacancyDto } from './dto/create-vacancy.dto';
@@ -30,13 +31,21 @@ interface VacancyRow extends QueryResultRow {
   employment_type_name: string | null;
   hiring_manager_name: string | null;
   recruiter_name: string | null;
+  branch_id: string | null;
+  branch_code: string | null;
+  branch_name: string | null;
+  external_request_id: string | null;
+  source_system: string | null;
 }
 
 @Injectable()
 export class VacanciesService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly accessScopeService: AccessScopeService,
+  ) {}
 
-  async findAll(filters: { status?: string; search?: string }) {
+  async findAll(filters: { status?: string; search?: string; branchId?: string; userId?: string }) {
     const where: string[] = [];
     const params: unknown[] = [];
 
@@ -53,6 +62,16 @@ export class VacanciesService {
         or d.name ilike $${params.length}
       )`);
     }
+    const scope = await this.accessScopeService.getScope(filters.userId);
+    if (!scope.allBranches) {
+      params.push(scope.branchIds);
+      where.push(`v.branch_id = any($${params.length}::uuid[])`);
+    }
+    if (filters.branchId) {
+      await this.accessScopeService.assertBranchAccess(filters.userId, filters.branchId);
+      params.push(filters.branchId);
+      where.push(`v.branch_id = $${params.length}`);
+    }
 
     const result = await this.databaseService.query<VacancyRow>(
       `${this.baseQuery()}
@@ -64,7 +83,7 @@ export class VacanciesService {
     return result.rows.map((row) => this.mapVacancy(row));
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string) {
     const result = await this.databaseService.query<VacancyRow>(
       `${this.baseQuery()} where v.id = $1`,
       [id],
@@ -74,11 +93,12 @@ export class VacanciesService {
     if (!vacancy) {
       throw new NotFoundException('Vacancy not found');
     }
+    await this.accessScopeService.assertBranchAccess(userId, vacancy.branch_id);
 
     return this.mapVacancy(vacancy);
   }
 
-  async create(dto: CreateVacancyDto) {
+  async create(dto: CreateVacancyDto, userId?: string) {
     this.require(dto.title, 'title');
     this.require(dto.position, 'position');
     this.require(dto.description, 'description');
@@ -95,22 +115,26 @@ export class VacanciesService {
       dto.employmentTypeCode || 'full_time',
       'Employment type not found',
     );
+    const branchId = dto.branchId || await this.accessScopeService.getPrimaryBranchId(userId);
+    if (!branchId) throw new BadRequestException('branchId is required');
+    await this.accessScopeService.assertBranchAccess(userId, branchId);
 
     const result = await this.databaseService.query<{ id: string }>(
       `insert into vacancies (
-        department_id, hiring_manager_id, recruiter_id, status_id, employment_type_id,
+        branch_id, department_id, hiring_manager_id, recruiter_id, status_id, employment_type_id,
         title, position, description, requirements, working_conditions,
         salary_min, salary_max, salary_currency, published_at, closed_at,
         headcount, is_confidential
       )
       values (
-        $1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10,
-        $11, $12, $13, $14, $15,
-        $16, $17
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, $16,
+        $17, $18
       )
       returning id`,
       [
+        branchId,
         dto.departmentId || null,
         dto.hiringManagerId || null,
         dto.recruiterId || null,
@@ -131,13 +155,15 @@ export class VacanciesService {
       ],
     );
 
-    return this.findOne(result.rows[0].id);
+    return this.findOne(result.rows[0].id, userId);
   }
 
-  async update(id: string, dto: UpdateVacancyDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateVacancyDto, userId?: string) {
+    await this.findOne(id, userId);
+    if (dto.branchId) await this.accessScopeService.assertBranchAccess(userId, dto.branchId);
 
     const values = compact({
+      branch_id: dto.branchId,
       department_id: dto.departmentId,
       hiring_manager_id: dto.hiringManagerId,
       recruiter_id: dto.recruiterId,
@@ -176,7 +202,7 @@ export class VacanciesService {
 
     const entries = Object.entries(values);
     if (!entries.length) {
-      return this.findOne(id);
+      return this.findOne(id, userId);
     }
 
     const assignments = entries.map(([key], index) => `${key} = $${index + 2}`);
@@ -187,7 +213,7 @@ export class VacanciesService {
       [id, ...entries.map(([, value]) => value)],
     );
 
-    return this.findOne(id);
+    return this.findOne(id, userId);
   }
 
   private baseQuery() {
@@ -200,13 +226,16 @@ export class VacanciesService {
       vs.code as status_code, vs.name as status_name,
       et.code as employment_type_code, et.name as employment_type_name,
       hm.full_name as hiring_manager_name,
-      r.full_name as recruiter_name
+      r.full_name as recruiter_name,
+      b.id as branch_id, b.code as branch_code, b.name as branch_name,
+      v.external_request_id, v.source_system
     from vacancies v
     join vacancy_statuses vs on vs.id = v.status_id
     left join departments d on d.id = v.department_id
     left join employment_types et on et.id = v.employment_type_id
     left join users hm on hm.id = v.hiring_manager_id
-    left join users r on r.id = v.recruiter_id`;
+    left join users r on r.id = v.recruiter_id
+    left join branches b on b.id = v.branch_id`;
   }
 
   private mapVacancy(row: VacancyRow) {
@@ -239,6 +268,11 @@ export class VacanciesService {
       isConfidential: row.is_confidential,
       hiringManagerName: row.hiring_manager_name,
       recruiterName: row.recruiter_name,
+      branch: row.branch_id
+        ? { id: row.branch_id, code: row.branch_code, name: row.branch_name }
+        : null,
+      externalRequestId: row.external_request_id,
+      sourceSystem: row.source_system,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -267,4 +301,3 @@ export class VacanciesService {
     }
   }
 }
-

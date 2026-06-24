@@ -2,8 +2,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE branches (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code text NOT NULL UNIQUE,
   name text NOT NULL,
   city text,
+  is_head_office boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -45,9 +47,17 @@ CREATE TABLE users (
   email text NOT NULL UNIQUE,
   phone text,
   password_hash text,
+  access_all_branches boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE user_branch_access (
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  branch_id uuid NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  is_primary boolean NOT NULL DEFAULT false,
+  PRIMARY KEY (user_id, branch_id)
 );
 
 CREATE TABLE vacancy_statuses (
@@ -65,6 +75,7 @@ CREATE TABLE employment_types (
 
 CREATE TABLE vacancies (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  branch_id uuid REFERENCES branches(id),
   department_id uuid REFERENCES departments(id),
   hiring_manager_id uuid REFERENCES users(id),
   recruiter_id uuid REFERENCES users(id),
@@ -83,6 +94,8 @@ CREATE TABLE vacancies (
   close_reason text,
   headcount integer NOT NULL DEFAULT 1,
   is_confidential boolean NOT NULL DEFAULT false,
+  external_request_id text UNIQUE,
+  source_system text,
   created_by uuid REFERENCES users(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -115,6 +128,7 @@ CREATE TABLE sources (
 
 CREATE TABLE candidates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  branch_id uuid REFERENCES branches(id),
   first_name text,
   last_name text,
   middle_name text,

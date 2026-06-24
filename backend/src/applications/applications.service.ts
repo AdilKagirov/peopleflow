@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { QueryResultRow } from 'pg';
+import { AccessScopeService } from '../access/access-scope.service';
 import { compact, toNumber } from '../common/sql';
 import { DatabaseService } from '../database/database.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
@@ -16,6 +17,9 @@ interface ApplicationRow extends QueryResultRow {
   vacancy_id: string;
   vacancy_title: string;
   vacancy_position: string;
+  branch_id: string | null;
+  branch_code: string | null;
+  branch_name: string | null;
   candidate_id: string;
   candidate_name: string;
   candidate_email: string | null;
@@ -53,13 +57,17 @@ interface StageHistoryRow extends QueryResultRow {
 
 @Injectable()
 export class ApplicationsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly accessScopeService: AccessScopeService,
+  ) {}
 
   async findAll(filters: {
     vacancyId?: string;
     candidateId?: string;
     stage?: string;
     status?: string;
+    userId?: string;
   }) {
     const where: string[] = [];
     const params: unknown[] = [];
@@ -83,6 +91,11 @@ export class ApplicationsService {
       params.push(filters.status);
       where.push(`st.code = $${params.length}`);
     }
+    const scope = await this.accessScopeService.getScope(filters.userId);
+    if (!scope.allBranches) {
+      params.push(scope.branchIds);
+      where.push(`v.branch_id = any($${params.length}::uuid[])`);
+    }
 
     const result = await this.databaseService.query<ApplicationRow>(
       `${this.baseQuery()}
@@ -94,7 +107,7 @@ export class ApplicationsService {
     return result.rows.map((row) => this.mapApplication(row));
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string) {
     const result = await this.databaseService.query<ApplicationRow>(
       `${this.baseQuery()} where a.id = $1`,
       [id],
@@ -104,12 +117,13 @@ export class ApplicationsService {
     if (!application) {
       throw new NotFoundException('Application not found');
     }
+    await this.accessScopeService.assertBranchAccess(userId, application.branch_id);
 
     return this.mapApplication(application);
   }
 
-  async getHistory(id: string) {
-    await this.findOne(id);
+  async getHistory(id: string, userId?: string) {
+    await this.findOne(id, userId);
 
     const result = await this.databaseService.query<StageHistoryRow>(
       `select
@@ -148,11 +162,16 @@ export class ApplicationsService {
     }));
   }
 
-  async create(dto: CreateApplicationDto) {
+  async create(dto: CreateApplicationDto, userId?: string) {
     this.require(dto.vacancyId, 'vacancyId');
     this.require(dto.candidateId, 'candidateId');
 
     await this.ensureExists('vacancies', dto.vacancyId, 'Vacancy not found');
+    const vacancyBranch = await this.databaseService.query<{ branch_id: string | null }>(
+      'select branch_id from vacancies where id = $1',
+      [dto.vacancyId],
+    );
+    await this.accessScopeService.assertBranchAccess(userId, vacancyBranch.rows[0]?.branch_id || null);
     await this.ensureExists('candidates', dto.candidateId, 'Candidate not found');
 
     const statusId = await this.lookupId(
@@ -194,7 +213,7 @@ export class ApplicationsService {
         comment: 'Application created',
       });
 
-      return this.findOne(result.rows[0].id);
+      return this.findOne(result.rows[0].id, userId);
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException('Candidate is already linked to this vacancy');
@@ -204,8 +223,8 @@ export class ApplicationsService {
     }
   }
 
-  async update(id: string, dto: UpdateApplicationDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateApplicationDto, userId?: string) {
+    await this.findOne(id, userId);
 
     const values = compact({
       recruiter_id: dto.recruiterId,
@@ -237,7 +256,7 @@ export class ApplicationsService {
 
     const entries = Object.entries(values);
     if (!entries.length) {
-      return this.findOne(id);
+      return this.findOne(id, userId);
     }
 
     const assignments = entries.map(([key], index) => `${key} = $${index + 2}`);
@@ -248,11 +267,11 @@ export class ApplicationsService {
       [id, ...entries.map(([, value]) => value)],
     );
 
-    return this.findOne(id);
+    return this.findOne(id, userId);
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, userId?: string) {
+    await this.findOne(id, userId);
     const approvals = await this.databaseService.query(
       'select 1 from approval_requests where application_id = $1 limit 1',
       [id],
@@ -264,8 +283,9 @@ export class ApplicationsService {
     return { deleted: true, applicationId: id };
   }
 
-  async move(id: string, dto: MoveApplicationDto) {
+  async move(id: string, dto: MoveApplicationDto, userId?: string) {
     this.require(dto.stageCode, 'stageCode');
+    await this.findOne(id, userId);
 
     const application = await this.getApplicationRecord(id);
     const toStageId = await this.lookupStageId(dto.stageCode);
@@ -278,7 +298,7 @@ export class ApplicationsService {
       : null;
 
     if (application.current_stage_id === toStageId && !statusId) {
-      return this.findOne(id);
+      return this.findOne(id, userId);
     }
 
     await this.databaseService.query(
@@ -298,12 +318,13 @@ export class ApplicationsService {
       comment: dto.comment || null,
     });
 
-    return this.findOne(id);
+    return this.findOne(id, userId);
   }
 
   private baseQuery() {
     return `select
       a.id, a.vacancy_id, v.title as vacancy_title, v.position as vacancy_position,
+      v.branch_id, b.code as branch_code, b.name as branch_name,
       a.candidate_id, c.full_name as candidate_name, c.email as candidate_email,
       st.code as status_code, st.name as status_name,
       ps.id as stage_id, ps.code as stage_code, ps.name as stage_name,
@@ -314,6 +335,7 @@ export class ApplicationsService {
       a.created_at, a.updated_at
     from applications a
     join vacancies v on v.id = a.vacancy_id
+    left join branches b on b.id = v.branch_id
     join candidates c on c.id = a.candidate_id
     join application_statuses st on st.id = a.status_id
     left join pipeline_stages ps on ps.id = a.current_stage_id
@@ -328,6 +350,9 @@ export class ApplicationsService {
         id: row.vacancy_id,
         title: row.vacancy_title,
         position: row.vacancy_position,
+        branch: row.branch_id
+          ? { id: row.branch_id, code: row.branch_code, name: row.branch_name }
+          : null,
       },
       candidate: {
         id: row.candidate_id,

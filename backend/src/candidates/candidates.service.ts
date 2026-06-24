@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { QueryResultRow } from 'pg';
 import { unlink } from 'node:fs/promises';
+import { AccessScopeService } from '../access/access-scope.service';
 import { compact, toNumber } from '../common/sql';
 import { DatabaseService } from '../database/database.service';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
@@ -26,6 +27,9 @@ interface CandidateRow extends QueryResultRow {
   source_name: string | null;
   applications_count: number;
   document_types: string[];
+  branch_id: string | null;
+  branch_code: string | null;
+  branch_name: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,9 +41,12 @@ interface AttachmentRow extends QueryResultRow {
 
 @Injectable()
 export class CandidatesService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly accessScopeService: AccessScopeService,
+  ) {}
 
-  async findAll(filters: { search?: string; source?: string }) {
+  async findAll(filters: { search?: string; source?: string; branchId?: string; userId?: string }) {
     const where: string[] = [];
     const params: unknown[] = [];
 
@@ -57,11 +64,36 @@ export class CandidatesService {
         or c.skills ilike $${params.length}
       )`);
     }
+    const scope = await this.accessScopeService.getScope(filters.userId);
+    if (!scope.allBranches) {
+      params.push(scope.branchIds);
+      where.push(`(
+        c.branch_id = any($${params.length}::uuid[])
+        or exists (
+          select 1 from applications scoped_a
+          join vacancies scoped_v on scoped_v.id = scoped_a.vacancy_id
+          where scoped_a.candidate_id = c.id
+            and scoped_v.branch_id = any($${params.length}::uuid[])
+        )
+      )`);
+    }
+    if (filters.branchId) {
+      await this.accessScopeService.assertBranchAccess(filters.userId, filters.branchId);
+      params.push(filters.branchId);
+      where.push(`(
+        c.branch_id = $${params.length}
+        or exists (
+          select 1 from applications scoped_a
+          join vacancies scoped_v on scoped_v.id = scoped_a.vacancy_id
+          where scoped_a.candidate_id = c.id and scoped_v.branch_id = $${params.length}
+        )
+      )`);
+    }
 
     const result = await this.databaseService.query<CandidateRow>(
       `${this.baseQuery()}
        ${where.length ? `where ${where.join(' and ')}` : ''}
-       group by c.id, s.code, s.name
+       group by c.id, s.code, s.name, b.id
        order by c.created_at desc`,
       params,
     );
@@ -69,11 +101,11 @@ export class CandidatesService {
     return result.rows.map((row) => this.mapCandidate(row));
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string) {
     const result = await this.databaseService.query<CandidateRow>(
       `${this.baseQuery()}
        where c.id = $1
-       group by c.id, s.code, s.name`,
+       group by c.id, s.code, s.name, b.id`,
       [id],
     );
 
@@ -81,27 +113,31 @@ export class CandidatesService {
     if (!candidate) {
       throw new NotFoundException('Candidate not found');
     }
+    await this.assertCandidateAccess(id, candidate.branch_id, userId);
 
     return this.mapCandidate(candidate);
   }
 
-  async create(dto: CreateCandidateDto) {
+  async create(dto: CreateCandidateDto, userId?: string) {
     this.require(dto.fullName, 'fullName');
 
     const sourceId = await this.lookupOptionalSourceId(dto.sourceCode || 'manual');
+    const branchId = dto.branchId || await this.accessScopeService.getPrimaryBranchId(userId);
+    await this.accessScopeService.assertBranchAccess(userId, branchId);
     const result = await this.databaseService.query<{ id: string }>(
       `insert into candidates (
-        first_name, last_name, middle_name, full_name, email, phone, city,
+        branch_id, first_name, last_name, middle_name, full_name, email, phone, city,
         current_position, total_experience_months, education, skills,
         expected_salary, expected_salary_currency, source_id, consent_personal_data
       )
       values (
-        $1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11,
-        $12, $13, $14, $15
+        $1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12,
+        $13, $14, $15, $16
       )
       returning id`,
       [
+        branchId,
         dto.firstName || null,
         dto.lastName || null,
         dto.middleName || null,
@@ -120,13 +156,15 @@ export class CandidatesService {
       ],
     );
 
-    return this.findOne(result.rows[0].id);
+    return this.findOne(result.rows[0].id, userId);
   }
 
-  async update(id: string, dto: UpdateCandidateDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateCandidateDto, userId?: string) {
+    await this.findOne(id, userId);
+    if (dto.branchId) await this.accessScopeService.assertBranchAccess(userId, dto.branchId);
 
     const values = compact({
+      branch_id: dto.branchId,
       first_name: dto.firstName,
       last_name: dto.lastName,
       middle_name: dto.middleName,
@@ -155,7 +193,7 @@ export class CandidatesService {
 
     const entries = Object.entries(values);
     if (!entries.length) {
-      return this.findOne(id);
+      return this.findOne(id, userId);
     }
 
     const assignments = entries.map(([key], index) => `${key} = $${index + 2}`);
@@ -166,11 +204,11 @@ export class CandidatesService {
       [id, ...entries.map(([, value]) => value)],
     );
 
-    return this.findOne(id);
+    return this.findOne(id, userId);
   }
 
-  async remove(id: string) {
-    await this.findOne(id);
+  async remove(id: string, userId?: string) {
+    await this.findOne(id, userId);
     const attachments = await this.databaseService.query<AttachmentRow>(
       `select id, file_path
        from attachments
@@ -206,6 +244,7 @@ export class CandidatesService {
   private baseQuery() {
     return `select
       c.id, c.first_name, c.last_name, c.middle_name, c.full_name,
+      c.branch_id, b.code as branch_code, b.name as branch_name,
       c.email, c.phone, c.city, c.current_position, c.total_experience_months,
       c.education, c.skills, c.expected_salary, c.expected_salary_currency,
       c.consent_personal_data, c.created_at, c.updated_at,
@@ -217,6 +256,7 @@ export class CandidatesService {
       ) as document_types
     from candidates c
     left join sources s on s.id = c.source_id
+    left join branches b on b.id = c.branch_id
     left join applications a on a.candidate_id = c.id
     left join attachments att
       on att.owner_type = 'candidate' and att.owner_id = c.id`;
@@ -242,6 +282,9 @@ export class CandidatesService {
       consentPersonalData: row.consent_personal_data,
       applicationsCount: row.applications_count,
       documentTypes: row.document_types,
+      branch: row.branch_id
+        ? { id: row.branch_id, code: row.branch_code, name: row.branch_name }
+        : null,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -258,6 +301,18 @@ export class CandidatesService {
     }
 
     return result.rows[0].id;
+  }
+
+  private async assertCandidateAccess(id: string, branchId: string | null, userId?: string) {
+    const scope = await this.accessScopeService.getScope(userId);
+    if (scope.allBranches) return;
+    if (branchId && scope.branchIds.includes(branchId)) return;
+    const application = await this.databaseService.query(
+      `select 1 from applications a join vacancies v on v.id = a.vacancy_id
+       where a.candidate_id = $1 and v.branch_id = any($2::uuid[]) limit 1`,
+      [id, scope.branchIds],
+    );
+    if (!application.rowCount) await this.accessScopeService.assertBranchAccess(userId, branchId);
   }
 
   private require(value: unknown, field: string) {

@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { QueryResultRow } from 'pg';
+import { AccessScopeService } from '../access/access-scope.service';
 import { DatabaseService } from '../database/database.service';
 import {
   CandidateDocumentType,
@@ -40,17 +41,22 @@ interface ApprovalRow extends QueryResultRow {
   stage_name: string | null;
   recruiter_id: string | null;
   recruiter_name: string | null;
+  branch_id: string | null;
 }
 
 @Injectable()
 export class ApprovalsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly accessScopeService: AccessScopeService,
+  ) {}
 
   async findAll(filters: {
     status?: string;
     type?: string;
     assignedRole?: string;
     applicationId?: string;
+    userId?: string;
   }) {
     const where: string[] = [];
     const params: unknown[] = [];
@@ -66,6 +72,11 @@ export class ApprovalsService {
         where.push(`${column} = $${params.length}`);
       }
     }
+    const scope = await this.accessScopeService.getScope(filters.userId);
+    if (!scope.allBranches) {
+      params.push(scope.branchIds);
+      where.push(`v.branch_id = any($${params.length}::uuid[])`);
+    }
 
     const result = await this.databaseService.query<ApprovalRow>(
       `${this.baseQuery()}
@@ -76,21 +87,23 @@ export class ApprovalsService {
     return result.rows.map((row) => this.mapApproval(row));
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string) {
     const result = await this.databaseService.query<ApprovalRow>(
       `${this.baseQuery()} where ar.id = $1`,
       [id],
     );
     if (!result.rows[0]) throw new NotFoundException('Approval request not found');
+    await this.accessScopeService.assertBranchAccess(userId, result.rows[0].branch_id);
     return this.mapApproval(result.rows[0]);
   }
 
-  async request(applicationId: string, dto: RequestApprovalDto) {
+  async request(applicationId: string, dto: RequestApprovalDto, userId?: string) {
     if (!['customer', 'security'].includes(dto.type)) {
       throw new BadRequestException('Approval type must be customer or security');
     }
 
     const application = await this.getApplication(applicationId);
+    await this.accessScopeService.assertBranchAccess(userId, application.branch_id);
     await this.ensureRequiredDocuments(application.candidate_id, dto.type);
     if (dto.type === 'security') {
       const customerApproved = await this.databaseService.query(
@@ -134,7 +147,7 @@ export class ApprovalsService {
         dto.requestedBy || null,
         dto.type === 'customer' ? 'Отправлен на согласование заказчику' : 'Отправлен на проверку СБ',
       );
-      return this.findOne(created.rows[0].id);
+      return this.findOne(created.rows[0].id, userId);
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException('This approval is already pending');
@@ -143,17 +156,18 @@ export class ApprovalsService {
     }
   }
 
-  async decide(id: string, dto: ApprovalDecisionDto) {
+  async decide(id: string, dto: ApprovalDecisionDto, userId?: string) {
     if (!['approved', 'rejected'].includes(dto.decision)) {
       throw new BadRequestException('Decision must be approved or rejected');
     }
 
     const approval = await this.getApprovalRecord(id);
+    const application = await this.getApplication(approval.application_id);
+    await this.accessScopeService.assertBranchAccess(userId, application.branch_id);
     if (approval.status !== 'pending') {
       throw new ConflictException('Approval request is already completed');
     }
 
-    const application = await this.getApplication(approval.application_id);
     const nextStageCode =
       approval.approval_type === 'customer' && dto.decision === 'approved'
         ? 'customer_interview'
@@ -177,7 +191,7 @@ export class ApprovalsService {
       `${approval.approval_type === 'customer' ? 'Заказчик' : 'СБ'}: кандидат ${decisionLabel}. ${dto.comment || ''}`.trim(),
     );
 
-    return this.findOne(id);
+    return this.findOne(id, userId);
   }
 
   private baseQuery() {
@@ -187,6 +201,7 @@ export class ApprovalsService {
       ar.requested_by, requester.full_name as requested_by_name,
       ar.decided_by, decider.full_name as decided_by_name,
       ar.request_comment, ar.decision_comment, ar.requested_at, ar.decided_at,
+      v.branch_id,
       c.id as candidate_id, c.full_name as candidate_name, c.email as candidate_email,
       v.id as vacancy_id, v.title as vacancy_title,
       ps.code as stage_code, ps.name as stage_name,
@@ -229,7 +244,9 @@ export class ApprovalsService {
       id: string;
       current_stage_id: string | null;
       candidate_id: string;
-    }>('select id, current_stage_id, candidate_id from applications where id = $1', [id]);
+      branch_id: string | null;
+    }>(`select a.id, a.current_stage_id, a.candidate_id, v.branch_id
+        from applications a join vacancies v on v.id = a.vacancy_id where a.id = $1`, [id]);
     if (!result.rows[0]) throw new NotFoundException('Application not found');
     return result.rows[0];
   }

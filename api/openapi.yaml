@@ -161,6 +161,28 @@ paths:
       responses:
         "201":
           description: Interview scheduled
+  /reference/branches:
+    get:
+      summary: List active KMF branches
+      responses:
+        "200":
+          description: Branch list
+  /integrations/websoft/status:
+    get:
+      summary: Get Websoft integration status
+      responses:
+        "200":
+          description: Websoft integration status
+  /integrations/websoft/vacancies:
+    post:
+      summary: Import or update a fully approved Websoft recruitment request
+      responses:
+        "201":
+          description: Vacancy imported and assigned by branch
+        "400":
+          description: Request is incomplete or not fully approved
+        "404":
+          description: Websoft branch code is not mapped
   /candidates/{id}/documents:
     get:
       summary: List candidate documents

@@ -5,10 +5,12 @@ import { extname } from 'node:path';
 import mammoth from 'mammoth';
 import * as rtf2text from 'rtf2text';
 import { DatabaseService } from '../database/database.service';
+import { AccessScopeService } from '../access/access-scope.service';
 import { ParsedResume, parseResumeText } from './resume-parser';
 
 interface ImportOptions {
   vacancyId?: string;
+  userId?: string;
 }
 
 interface CandidateRecord extends QueryResultRow {
@@ -17,13 +19,20 @@ interface CandidateRecord extends QueryResultRow {
 
 @Injectable()
 export class ImportsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly accessScopeService: AccessScopeService,
+  ) {}
 
   async importResumeFile(file: Express.Multer.File, options: ImportOptions) {
     const rawText = await this.extractText(file);
     const parsed = parseResumeText(rawText, file.originalname);
     const sourceId = await this.ensureSource('file_import', 'Импорт файла');
-    const candidateId = await this.upsertCandidate(parsed, sourceId);
+    const branchId = options.vacancyId
+      ? await this.getVacancyBranchId(options.vacancyId)
+      : await this.accessScopeService.getPrimaryBranchId(options.userId);
+    await this.accessScopeService.assertBranchAccess(options.userId, branchId);
+    const candidateId = await this.upsertCandidate(parsed, sourceId, branchId);
     const attachmentId = await this.createAttachment(file, candidateId);
     const resumeId = await this.createResume(candidateId, attachmentId, rawText, parsed);
     const applicationId = options.vacancyId
@@ -79,6 +88,7 @@ export class ImportsService {
   private async upsertCandidate(
     parsed: ParsedResume,
     sourceId: string,
+    branchId: string | null,
   ) {
     if (parsed.email) {
       const existing = await this.databaseService.query<CandidateRecord>(
@@ -97,6 +107,7 @@ export class ImportsService {
                current_position = coalesce($7, current_position),
                total_experience_months = coalesce($8, total_experience_months),
                education = coalesce($9, education),
+               branch_id = coalesce(branch_id, $10),
                updated_at = now()
            where id = $1`,
           [
@@ -109,6 +120,7 @@ export class ImportsService {
             parsed.currentPosition,
             parsed.totalExperienceMonths,
             parsed.education,
+            branchId,
           ],
         );
         return existing.rows[0].id;
@@ -117,12 +129,13 @@ export class ImportsService {
 
     const created = await this.databaseService.query<CandidateRecord>(
       `insert into candidates (
-        full_name, email, phone, city, current_position, total_experience_months,
+        branch_id, full_name, email, phone, city, current_position, total_experience_months,
         education, skills, source_id, consent_personal_data
       )
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
       returning id`,
       [
+        branchId,
         parsed.fullName,
         parsed.email,
         parsed.phone,
@@ -203,5 +216,13 @@ export class ImportsService {
       [code],
     );
     return result.rows[0].id;
+  }
+
+  private async getVacancyBranchId(vacancyId: string) {
+    const result = await this.databaseService.query<{ branch_id: string | null }>(
+      'select branch_id from vacancies where id = $1',
+      [vacancyId],
+    );
+    return result.rows[0]?.branch_id || null;
   }
 }

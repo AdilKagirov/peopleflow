@@ -1,6 +1,6 @@
-INSERT INTO branches (name, city) VALUES
-  ('Головной офис KMF Bank', 'Алматы'),
-  ('Филиал Астана', 'Астана')
+INSERT INTO branches (code, name, city, is_head_office) VALUES
+  ('HEAD', 'Головной офис KMF Bank', 'Алматы', true),
+  ('AST', 'Филиал Астана', 'Астана', false)
 ON CONFLICT DO NOTHING;
 
 INSERT INTO departments (branch_id, name)
@@ -156,20 +156,20 @@ VALUES
   ('rejection', 'Отказ', 'Статус по вакансии {{vacancy_title}}', 'Здравствуйте, {{candidate_name}}! Спасибо за интерес к KMF Bank. Сейчас мы не готовы продолжить процесс.')
 ON CONFLICT (code) DO NOTHING;
 
-INSERT INTO users (department_id, role_id, full_name, email, phone)
-SELECT d.id, r.id, 'Администратор KMF', 'admin.peopleflow@kmf.kz', '+7 700 000 00 00'
+INSERT INTO users (branch_id, department_id, role_id, full_name, email, phone, access_all_branches)
+SELECT d.branch_id, d.id, r.id, 'Администратор KMF', 'admin.peopleflow@kmf.kz', '+7 700 000 00 00', true
 FROM departments d
 JOIN roles r ON r.code = 'admin'
 WHERE d.name = 'HR'
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO vacancies (
-  department_id, hiring_manager_id, recruiter_id, status_id, employment_type_id,
+  branch_id, department_id, hiring_manager_id, recruiter_id, status_id, employment_type_id,
   title, position, description, requirements, working_conditions,
   salary_min, salary_max, published_at, closed_at, created_by
 )
 SELECT
-  d.id, u.id, u.id, vs.id, et.id,
+  d.branch_id, d.id, u.id, u.id, vs.id, et.id,
   'Frontend-разработчик',
   'Middle Frontend Developer',
   'Разработка интерфейсов KMF PeopleFlow и внутренних HR-сервисов.',
@@ -183,8 +183,8 @@ JOIN employment_types et ON et.code = 'full_time'
 WHERE d.name = 'IT'
 ON CONFLICT DO NOTHING;
 
-INSERT INTO candidates (full_name, email, phone, city, current_position, total_experience_months, education, skills, source_id, consent_personal_data, created_by)
-SELECT 'Алия Смагулова', 'aliya@example.com', '+7 701 111 22 33', 'Алматы', 'Frontend Developer', 48,
+INSERT INTO candidates (branch_id, full_name, email, phone, city, current_position, total_experience_months, education, skills, source_id, consent_personal_data, created_by)
+SELECT u.branch_id, 'Алия Смагулова', 'aliya@example.com', '+7 701 111 22 33', 'Алматы', 'Frontend Developer', 48,
        'КазНУ, информационные системы', 'JavaScript, React, TypeScript, CSS', s.id, true, u.id
 FROM sources s
 JOIN users u ON u.email = 'admin.peopleflow@kmf.kz'

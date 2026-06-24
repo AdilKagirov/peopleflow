@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Post,
   Res,
@@ -25,8 +26,8 @@ export class CandidateDocumentsController {
   constructor(private readonly documentsService: CandidateDocumentsService) {}
 
   @Get()
-  findAll(@Param('candidateId') candidateId: string) {
-    return this.documentsService.findAll(candidateId);
+  findAll(@Param('candidateId') candidateId: string, @Headers('x-peopleflow-user-id') userId?: string) {
+    return this.documentsService.findAll(candidateId, userId);
   }
 
   @Post()
@@ -57,9 +58,10 @@ export class CandidateDocumentsController {
     @UploadedFile() file: Express.Multer.File,
     @Body('documentType') documentType: string,
     @Body('uploadedBy') uploadedBy?: string,
+    @Headers('x-peopleflow-user-id') userId?: string,
   ) {
     if (!file) throw new BadRequestException('Document file is required');
-    return this.documentsService.create(candidateId, documentType, file, uploadedBy);
+    return this.documentsService.create(candidateId, documentType, file, uploadedBy, userId);
   }
 
   @Get(':documentId/download')
@@ -67,8 +69,9 @@ export class CandidateDocumentsController {
     @Param('candidateId') candidateId: string,
     @Param('documentId') documentId: string,
     @Res({ passthrough: true }) response: Response,
+    @Headers('x-peopleflow-user-id') userId?: string,
   ) {
-    const document = await this.documentsService.getFile(candidateId, documentId);
+    const document = await this.documentsService.getFile(candidateId, documentId, userId);
     response.setHeader('Content-Type', document.mime_type || 'application/octet-stream');
     response.setHeader(
       'Content-Disposition',
@@ -81,7 +84,8 @@ export class CandidateDocumentsController {
   remove(
     @Param('candidateId') candidateId: string,
     @Param('documentId') documentId: string,
+    @Headers('x-peopleflow-user-id') userId?: string,
   ) {
-    return this.documentsService.remove(candidateId, documentId);
+    return this.documentsService.remove(candidateId, documentId, userId);
   }
 }

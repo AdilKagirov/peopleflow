@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { QueryResultRow } from 'pg';
 import { unlink } from 'node:fs/promises';
 import { DatabaseService } from '../database/database.service';
+import { AccessScopeService } from '../access/access-scope.service';
 import {
   CandidateDocumentType,
   candidateDocumentLabels,
@@ -23,10 +24,13 @@ interface DocumentRow extends QueryResultRow {
 
 @Injectable()
 export class CandidateDocumentsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly accessScopeService: AccessScopeService,
+  ) {}
 
-  async findAll(candidateId: string) {
-    await this.ensureCandidate(candidateId);
+  async findAll(candidateId: string, userId?: string) {
+    await this.ensureCandidate(candidateId, userId);
     const result = await this.databaseService.query<DocumentRow>(
       `${this.baseQuery()}
        where a.owner_type = 'candidate' and a.owner_id = $1
@@ -42,9 +46,10 @@ export class CandidateDocumentsService {
     documentType: string,
     file: Express.Multer.File,
     uploadedBy?: string,
+    userId?: string,
   ) {
     try {
-      await this.ensureCandidate(candidateId);
+      await this.ensureCandidate(candidateId, userId);
       if (!candidateDocumentTypes.includes(documentType as CandidateDocumentType)) {
         throw new BadRequestException('Unsupported candidate document type');
       }
@@ -64,14 +69,15 @@ export class CandidateDocumentsService {
           uploadedBy || null,
         ],
       );
-      return this.findOne(candidateId, result.rows[0].id);
+      return this.findOne(candidateId, result.rows[0].id, userId);
     } catch (error) {
       await this.removeLocalFile(file.path);
       throw error;
     }
   }
 
-  async findOne(candidateId: string, documentId: string) {
+  async findOne(candidateId: string, documentId: string, userId?: string) {
+    await this.ensureCandidate(candidateId, userId);
     const result = await this.databaseService.query<DocumentRow>(
       `${this.baseQuery()}
        where a.id = $1 and a.owner_type = 'candidate' and a.owner_id = $2`,
@@ -81,7 +87,8 @@ export class CandidateDocumentsService {
     return this.mapDocument(result.rows[0]);
   }
 
-  async getFile(candidateId: string, documentId: string) {
+  async getFile(candidateId: string, documentId: string, userId?: string) {
+    await this.ensureCandidate(candidateId, userId);
     const result = await this.databaseService.query<DocumentRow>(
       `${this.baseQuery()}
        where a.id = $1 and a.owner_type = 'candidate' and a.owner_id = $2`,
@@ -91,19 +98,29 @@ export class CandidateDocumentsService {
     return result.rows[0];
   }
 
-  async remove(candidateId: string, documentId: string) {
-    const document = await this.getFile(candidateId, documentId);
+  async remove(candidateId: string, documentId: string, userId?: string) {
+    const document = await this.getFile(candidateId, documentId, userId);
     await this.databaseService.query('delete from attachments where id = $1', [documentId]);
     await this.removeLocalFile(document.file_path);
     return { deleted: true, documentId };
   }
 
-  private async ensureCandidate(candidateId: string) {
-    const result = await this.databaseService.query(
-      'select 1 from candidates where id = $1',
+  private async ensureCandidate(candidateId: string, userId?: string) {
+    const result = await this.databaseService.query<{ branch_id: string | null }>(
+      'select branch_id from candidates where id = $1',
       [candidateId],
     );
     if (!result.rowCount) throw new NotFoundException('Candidate not found');
+    const scope = await this.accessScopeService.getScope(userId);
+    if (scope.allBranches || (result.rows[0].branch_id && scope.branchIds.includes(result.rows[0].branch_id))) return;
+    const application = await this.databaseService.query(
+      `select 1 from applications a join vacancies v on v.id = a.vacancy_id
+       where a.candidate_id = $1 and v.branch_id = any($2::uuid[]) limit 1`,
+      [candidateId, scope.branchIds],
+    );
+    if (!application.rowCount) {
+      await this.accessScopeService.assertBranchAccess(userId, result.rows[0].branch_id);
+    }
   }
 
   private async removeLocalFile(filePath: string) {

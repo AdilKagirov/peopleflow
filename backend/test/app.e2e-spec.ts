@@ -3,10 +3,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { DatabaseService } from './../src/database/database.service';
 
 describe('PeopleFlow API (e2e)', () => {
   let app: INestApplication<App>;
   let candidateId: string | undefined;
+  let branchCandidateId: string | undefined;
+  let websoftVacancyId: string | undefined;
+  let databaseService: DatabaseService;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -14,8 +18,86 @@ describe('PeopleFlow API (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+    databaseService = moduleFixture.get(DatabaseService);
     app.setGlobalPrefix('api');
     await app.init();
+  });
+
+  it('isolates branch data and imports approved Websoft vacancies idempotently', async () => {
+    const reference = await request(app.getHttpServer()).get('/api/reference').expect(200);
+    const astana = reference.body.branches.find((item: { code: string }) => item.code === 'AST');
+    const almaty = reference.body.branches.find((item: { code: string }) => item.code === 'ALA');
+    const astanaRecruiter = reference.body.users.find(
+      (item: { branch?: { code: string }; role?: { code: string } }) =>
+        item.branch?.code === 'AST' && item.role?.code === 'recruiter',
+    );
+    const almatyRecruiter = reference.body.users.find(
+      (item: { branch?: { code: string }; role?: { code: string } }) =>
+        item.branch?.code === 'ALA' && item.role?.code === 'recruiter',
+    );
+    const headOfficeRecruiter = reference.body.users.find(
+      (item: { accessAllBranches: boolean; role?: { code: string } }) =>
+        item.accessAllBranches && item.role?.code === 'recruiter',
+    );
+    expect(astanaRecruiter).toBeDefined();
+    expect(almatyRecruiter).toBeDefined();
+    expect(headOfficeRecruiter).toBeDefined();
+
+    const externalRequestId = `WS-E2E-${Date.now()}`;
+    const payload = {
+      externalRequestId,
+      approvalStatus: 'approved',
+      branchCode: 'AST',
+      title: 'Websoft E2E Vacancy',
+      position: 'E2E Specialist',
+      departmentName: 'E2E Department',
+      description: 'Approved request from Websoft',
+      requirements: 'E2E requirements',
+      workingConditions: 'E2E conditions',
+    };
+    const imported = await request(app.getHttpServer())
+      .post('/api/integrations/websoft/vacancies')
+      .send(payload)
+      .expect(201);
+    websoftVacancyId = imported.body.vacancyId;
+    expect(imported.body.assignmentStatus).toBe('assigned');
+
+    const repeated = await request(app.getHttpServer())
+      .post('/api/integrations/websoft/vacancies')
+      .send({ ...payload, description: 'Updated Websoft request' })
+      .expect(201);
+    expect(repeated.body.vacancyId).toBe(websoftVacancyId);
+    expect(repeated.body.created).toBe(false);
+
+    const astanaVacancies = await request(app.getHttpServer())
+      .get('/api/vacancies')
+      .set('X-PeopleFlow-User-Id', astanaRecruiter.id)
+      .expect(200);
+    expect(astanaVacancies.body.some((item: { id: string }) => item.id === websoftVacancyId)).toBe(true);
+
+    await request(app.getHttpServer())
+      .get(`/api/vacancies/${websoftVacancyId}`)
+      .set('X-PeopleFlow-User-Id', almatyRecruiter.id)
+      .expect(403);
+
+    const headOfficeVacancies = await request(app.getHttpServer())
+      .get('/api/vacancies')
+      .set('X-PeopleFlow-User-Id', headOfficeRecruiter.id)
+      .expect(200);
+    expect(headOfficeVacancies.body.some((item: { id: string }) => item.id === websoftVacancyId)).toBe(true);
+
+    const branchCandidate = await request(app.getHttpServer())
+      .post('/api/candidates')
+      .set('X-PeopleFlow-User-Id', astanaRecruiter.id)
+      .send({ fullName: 'Astana Scoped Candidate', branchId: astana.id, sourceCode: 'manual' })
+      .expect(201);
+    branchCandidateId = branchCandidate.body.id;
+
+    await request(app.getHttpServer())
+      .get(`/api/candidates/${branchCandidateId}`)
+      .set('X-PeopleFlow-User-Id', almatyRecruiter.id)
+      .expect(403);
+    expect(almaty.id).toBeDefined();
   });
 
   it('runs customer and security candidate approval workflow', async () => {
@@ -156,6 +238,12 @@ describe('PeopleFlow API (e2e)', () => {
   afterAll(async () => {
     if (candidateId) {
       await request(app.getHttpServer()).delete(`/api/candidates/${candidateId}`);
+    }
+    if (branchCandidateId) {
+      await request(app.getHttpServer()).delete(`/api/candidates/${branchCandidateId}`);
+    }
+    if (websoftVacancyId) {
+      await databaseService.query('delete from vacancies where id = $1', [websoftVacancyId]);
     }
     if (app) await app.close();
   });

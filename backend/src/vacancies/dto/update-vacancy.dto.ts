@@ -1,4 +1,5 @@
 export class UpdateVacancyDto {
+  branchId?: string | null;
   title?: string;
   position?: string;
   description?: string;
@@ -18,4 +19,3 @@ export class UpdateVacancyDto {
   headcount?: number;
   isConfidential?: boolean;
 }
-

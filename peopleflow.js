@@ -171,8 +171,18 @@ function init() {
   $$("[data-view-jump]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.viewJump)));
   $("#roleSelect").addEventListener("change", (event) => {
     state.role = event.target.value;
+    const roleCode = roleNameToCode(state.role);
+    const user = state.reference?.users?.find((item) => item.role?.code === roleCode);
+    if (user) state.currentUserId = user.id;
     saveState();
-    render();
+    refreshFromApi();
+  });
+  $("#userSelect").addEventListener("change", (event) => {
+    state.currentUserId = event.target.value;
+    const user = state.reference?.users?.find((item) => item.id === state.currentUserId);
+    if (user?.role?.name) state.role = apiRoleToUiRole(user.role.name);
+    saveState();
+    refreshFromApi();
   });
   $("#resetDemo").addEventListener("click", () => {
     state = structuredClone(demo);
@@ -184,8 +194,10 @@ function init() {
   $("#quickAddCandidate").addEventListener("click", () => candidateForm());
   $("#vacancySearch").addEventListener("input", renderVacancies);
   $("#vacancyStatusFilter").addEventListener("change", renderVacancies);
+  $("#vacancyBranchFilter").addEventListener("change", renderVacancies);
   $("#candidateSearch").addEventListener("input", renderCandidates);
   $("#candidateStageFilter").addEventListener("change", renderCandidates);
+  $("#candidateBranchFilter").addEventListener("change", renderCandidates);
   $("#candidateApprovalFilter").addEventListener("change", renderCandidates);
   $("#approvalTypeFilter").addEventListener("change", renderApprovals);
   $("#approvalStatusFilter").addEventListener("change", renderApprovals);
@@ -237,6 +249,9 @@ async function refreshFromApi() {
     ]);
 
     state.reference = reference;
+    if (!state.currentUserId || !reference.users.some((item) => item.id === state.currentUserId)) {
+      state.currentUserId = reference.users.find((item) => item.role?.code === "admin")?.id || reference.users[0]?.id;
+    }
     state.apiConnected = true;
     state.stageOptions = reference.pipelineStages.map((stage) => ({
       code: stage.code,
@@ -249,6 +264,8 @@ async function refreshFromApi() {
     state.interviews = interviews;
     saveState();
     syncReferenceFilters();
+    syncUserSelector();
+    syncBranchFilters();
     syncResumeVacancyOptions();
     render();
   } catch (error) {
@@ -259,8 +276,13 @@ async function refreshFromApi() {
 
 async function apiFetch(path, options = {}) {
   const isForm = options.body instanceof FormData;
+  const userId = currentUserId();
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: isForm ? options.headers || {} : { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: {
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
+      ...(userId ? { "X-PeopleFlow-User-Id": userId } : {}),
+      ...(options.headers || {}),
+    },
     ...options,
   });
 
@@ -270,6 +292,28 @@ async function apiFetch(path, options = {}) {
   }
 
   return response.status === 204 ? null : response.json();
+}
+
+function syncUserSelector() {
+  const users = state.reference?.users || [];
+  $("#userSelect").innerHTML = users.map((user) =>
+    `<option value="${user.id}">${user.fullName} · ${user.branch?.name || "Все филиалы"}</option>`
+  ).join("");
+  $("#userSelect").value = state.currentUserId || "";
+  $("#roleSelect").value = state.role;
+}
+
+function syncBranchFilters() {
+  const branches = state.reference?.branches || [];
+  for (const selector of ["#vacancyBranchFilter", "#candidateBranchFilter"]) {
+    const select = $(selector);
+    const selected = select.value;
+    select.innerHTML = `<option value="">Все филиалы</option>` +
+      branches.map((branch) => `<option value="${branch.id}">${branch.name}</option>`).join("");
+    if (branches.some((branch) => branch.id === selected)) select.value = selected;
+    const user = state.reference?.users?.find((item) => item.id === currentUserId());
+    select.disabled = !user?.accessAllBranches;
+  }
 }
 
 function syncReferenceFilters() {
@@ -312,6 +356,7 @@ function mapApiVacancy(item) {
     access: "По ролям KMF PeopleFlow",
     attachments: "",
     channels: "KMF PeopleFlow API",
+    branch: item.branch,
   };
 }
 
@@ -335,6 +380,7 @@ function mapApiCandidate(item, applications = [], interviews = []) {
     currentPosition: item.currentPosition || "",
     totalExperienceMonths: item.totalExperienceMonths,
     documentTypes: item.documentTypes || [],
+    branch: item.branch,
     experience: item.totalExperienceMonths ? `${Math.round(item.totalExperienceMonths / 12)} г.` : "не указано",
     education: item.education || "",
     skills: item.skills || "",
@@ -394,9 +440,10 @@ function renderDashboard() {
 function renderVacancies() {
   const query = $("#vacancySearch")?.value.toLowerCase() || "";
   const status = $("#vacancyStatusFilter")?.value || "";
+  const branchId = $("#vacancyBranchFilter")?.value || "";
   const items = state.vacancies.filter((item) => {
     const haystack = `${item.title} ${item.department} ${item.position}`.toLowerCase();
-    return haystack.includes(query) && (!status || item.status === status);
+    return haystack.includes(query) && (!status || item.status === status) && (!branchId || item.branch?.id === branchId);
   });
   $("#vacanciesList").innerHTML = items.length ? vacancyList(items) : empty("Вакансии не найдены");
   $$(".edit-vacancy").forEach((button) => button.addEventListener("click", () => vacancyForm(button.dataset.id)));
@@ -417,6 +464,7 @@ function vacancyRow(item) {
       <div class="record-details">
         <span>${item.position}</span>
         <span>${item.department}</span>
+        <span>${item.branch?.name || "Филиал не указан"}</span>
         <span>${item.employment}</span>
         <span>${item.salary}</span>
         <span>${item.publishedAt || "—"} · ${item.closedAt || "—"}</span>
@@ -432,10 +480,11 @@ function renderCandidates() {
   const query = $("#candidateSearch")?.value.toLowerCase() || "";
   const stage = $("#candidateStageFilter")?.value || "";
   const approval = $("#candidateApprovalFilter")?.value || "";
+  const branchId = $("#candidateBranchFilter")?.value || "";
   const items = state.candidates.filter((item) => {
     const haystack = `${item.name} ${item.contacts} ${item.skills} ${item.tags}`.toLowerCase();
     const matchesStage = !stage || item.stages?.includes(stage) || item.stage === stage;
-    return haystack.includes(query) && matchesStage && matchesCandidateApproval(item, approval);
+    return haystack.includes(query) && matchesStage && matchesCandidateApproval(item, approval) && (!branchId || item.branch?.id === branchId || item.applications?.some((application) => application.vacancy.branch?.id === branchId));
   });
   $("#candidatesList").innerHTML = items.length ? candidateList(items) : empty("Кандидаты не найдены");
   $$(".edit-candidate").forEach((button) => button.addEventListener("click", () => candidateForm(button.dataset.id)));
@@ -791,7 +840,26 @@ async function decideApproval(id, decision) {
 }
 
 function currentUserId() {
-  return state.reference?.users?.[0]?.id || null;
+  return state.currentUserId || state.reference?.users?.[0]?.id || null;
+}
+
+function roleNameToCode(name) {
+  return {
+    "Администратор": "admin",
+    "Рекрутер": "recruiter",
+    "Заказчик": "hiring_manager",
+    "Служба безопасности": "security",
+    "HR филиала": "branch_hr",
+  }[name] || "recruiter";
+}
+
+function apiRoleToUiRole(name) {
+  return name === "Менеджер по найму" ? "Заказчик" : name;
+}
+
+function defaultBranch() {
+  const user = state.reference?.users?.find((item) => item.id === currentUserId());
+  return user?.branch || state.reference?.branches?.find((item) => item.isHeadOffice) || null;
 }
 
 function renderMessages() {
@@ -828,7 +896,9 @@ function renderRoles() {
 
 function vacancyForm(id) {
   const item = state.vacancies.find((vacancy) => vacancy.id === id) || {};
+  const selectedBranch = item.branch || defaultBranch();
   openModal(id ? "Редактировать вакансию" : "Новая вакансия", [
+    selectField("branchId", "Филиал", (state.reference?.branches || []).map((branch) => `${branch.id}|${branch.name}`), selectedBranch ? `${selectedBranch.id}|${selectedBranch.name}` : ""),
     field("title", "Название", item.title, true),
     field("department", "Отдел", item.department, true),
     field("position", "Должность", item.position, true),
@@ -879,7 +949,9 @@ async function candidateForm(id) {
     : state.vacancies
       .filter((vacancy) => vacancy.title === item.vacancyTitle)
       .map((vacancy) => vacancy.id);
+  const selectedBranch = item.branch || defaultBranch();
   openModal(id ? "Профиль кандидата" : "Новый кандидат", [
+    selectField("branchId", "Филиал", (state.reference?.branches || []).map((branch) => `${branch.id}|${branch.name}`), selectedBranch ? `${selectedBranch.id}|${selectedBranch.name}` : ""),
     field("name", "ФИО", item.name, true),
     field("contacts", "Контакты", item.contacts, true),
     candidateDocumentsField(id, item.documents || []),
@@ -1171,6 +1243,7 @@ function toVacancyPayload(data) {
   const status = state.reference?.vacancyStatuses?.find((item) => item.name === data.status);
   const employment = state.reference?.employmentTypes?.find((item) => item.name === data.employment);
   return {
+    branchId: data.branchId?.split("|")[0] || null,
     title: data.title,
     position: data.position,
     description: data.description,
@@ -1187,6 +1260,7 @@ function toVacancyPayload(data) {
 function toCandidatePayload(data) {
   const source = state.reference?.sources?.find((item) => item.name === data.source);
   return {
+    branchId: data.branchId?.split("|")[0] || null,
     fullName: data.name,
     email: extractEmail(data.contacts),
     phone: extractPhone(data.contacts),

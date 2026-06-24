@@ -4,6 +4,7 @@ export class CreateVacancyDto {
   description!: string;
   requirements!: string;
   workingConditions!: string;
+  branchId?: string;
   departmentId?: string;
   hiringManagerId?: string;
   recruiterId?: string;
@@ -17,4 +18,3 @@ export class CreateVacancyDto {
   headcount?: number;
   isConfidential?: boolean;
 }
-

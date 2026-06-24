@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Headers,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -45,12 +46,12 @@ export class ImportsController {
   importResume(
     @UploadedFile() file: Express.Multer.File,
     @Body('vacancyId') vacancyId?: string,
+    @Headers('x-peopleflow-user-id') userId?: string,
   ) {
     if (!file) {
       throw new BadRequestException('Resume file is required');
     }
 
-    return this.importsService.importResumeFile(file, { vacancyId });
+    return this.importsService.importResumeFile(file, { vacancyId, userId });
   }
 }
-

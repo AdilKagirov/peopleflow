@@ -26,6 +26,8 @@
         <button class="nav-item" data-view="settings">Роли</button>
       </nav>
       <div class="role-card">
+        <label for="userSelect">Текущий пользователь</label>
+        <select id="userSelect"></select>
         <label for="roleSelect">Текущая роль</label>
         <select id="roleSelect"></select>
       </div>
@@ -81,6 +83,7 @@
           </div>
           <div class="toolbar">
             <input id="vacancySearch" type="search" placeholder="Поиск по названию, отделу, должности" />
+            <select id="vacancyBranchFilter"><option value="">Все филиалы</option></select>
             <select id="vacancyStatusFilter"><option value="">Все статусы</option></select>
           </div>
           <div id="vacanciesList" class="grid-list"></div>
@@ -96,6 +99,7 @@
           <div class="toolbar">
             <input id="candidateSearch" type="search" placeholder="ФИО, навыки, контакты, теги" />
             <select id="candidateStageFilter"><option value="">Все этапы</option></select>
+            <select id="candidateBranchFilter"><option value="">Все филиалы</option></select>
             <select id="candidateApprovalFilter">
               <option value="">Все согласования</option>
               <option value="pending_customer">У заказчика</option>

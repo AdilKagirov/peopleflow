@@ -1,4 +1,5 @@
 export class CreateCandidateDto {
+  branchId?: string;
   firstName?: string;
   lastName?: string;
   middleName?: string;
@@ -15,4 +16,3 @@ export class CreateCandidateDto {
   sourceCode?: string;
   consentPersonalData?: boolean;
 }
-

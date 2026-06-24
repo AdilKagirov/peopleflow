@@ -1,4 +1,5 @@
 export class UpdateCandidateDto {
+  branchId?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   middleName?: string | null;
@@ -15,4 +16,3 @@ export class UpdateCandidateDto {
   sourceCode?: string | null;
   consentPersonalData?: boolean;
 }
-

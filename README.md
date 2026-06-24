@@ -68,6 +68,46 @@ The health endpoint checks the PostgreSQL connection when the database container
 
 Interview planning is stored in PostgreSQL and linked to a specific candidate application. Scheduled interviews remain available after a page refresh and are shown on the dashboard and in the candidate profile.
 
+## Branch Access
+
+PeopleFlow uses one database with branch-scoped access. Branch recruiters see only vacancies, applications, approvals, documents, and candidates belonging to their assigned branches. Head-office recruiters and administrators have access to every branch. A user can be assigned to multiple branches through `user_branch_access`, which also supports temporary replacement recruiters.
+
+The prototype sends the selected user through this request header:
+
+```text
+X-PeopleFlow-User-Id: <user UUID>
+```
+
+The frontend sidebar contains a current-user selector for testing head-office and branch views. Production deployment should replace this header simulation with authenticated SSO identity while keeping the same backend branch checks.
+
+## Websoft Vacancy Import
+
+Only fully approved Websoft requests are accepted:
+
+```text
+POST /api/integrations/websoft/vacancies
+```
+
+Example payload:
+
+```json
+{
+  "externalRequestId": "WS-REQ-10042",
+  "approvalStatus": "approved",
+  "branchCode": "AST",
+  "title": "Кредитный менеджер",
+  "position": "Кредитный менеджер",
+  "departmentName": "Розничный бизнес",
+  "hiringManagerEmail": "manager@kmf.kz",
+  "description": "Подбор по утвержденной заявке",
+  "requirements": "Опыт работы с клиентами",
+  "workingConditions": "Полная занятость",
+  "headcount": 2
+}
+```
+
+`externalRequestId` makes the import idempotent. Repeated delivery updates the existing vacancy. `branchCode` routes the vacancy to the branch and its primary recruiter. Unknown branch codes are rejected instead of exposing the vacancy to the wrong branch.
+
 Delete an imported candidate:
 
 ```bash
