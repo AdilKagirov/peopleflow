@@ -61,6 +61,16 @@
             <div id="upcomingInterviews" class="list"></div>
           </section>
         </div>
+        <section class="panel dashboard-approvals">
+          <div class="section-head">
+            <div>
+              <h2>Сейчас на согласовании</h2>
+              <p class="muted">Кандидаты, ожидающие решения заказчика или СБ</p>
+            </div>
+            <button class="ghost" data-view-jump="approvals">Все согласования</button>
+          </div>
+          <div id="pendingApprovals" class="list"></div>
+        </section>
       </section>
 
       <section class="view" id="vacanciesView">
@@ -86,6 +96,14 @@
           <div class="toolbar">
             <input id="candidateSearch" type="search" placeholder="ФИО, навыки, контакты, теги" />
             <select id="candidateStageFilter"><option value="">Все этапы</option></select>
+            <select id="candidateApprovalFilter">
+              <option value="">Все согласования</option>
+              <option value="pending_customer">У заказчика</option>
+              <option value="pending_security">В СБ</option>
+              <option value="approved">Одобрено</option>
+              <option value="rejected">Отклонено</option>
+              <option value="none">Не отправлены</option>
+            </select>
             <input id="resumeImport" type="file" accept=".pdf,.doc,.docx,.txt" />
           </div>
           <div id="candidatesList" class="grid-list"></div>

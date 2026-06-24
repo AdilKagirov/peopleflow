@@ -220,12 +220,20 @@ textarea { min-height: 86px; resize: vertical; }
   gap: 8px;
   flex-wrap: wrap;
 }
+.workflow-vacancy {
+  min-width: 160px;
+  max-width: 280px;
+}
+.badge.neutral {
+  color: #52606b;
+  background: #edf1f4;
+}
 .application-workflows {
   display: grid;
   gap: 7px;
   margin-top: 10px;
 }
-.record-workflow-actions > span {
+.record-workflow-actions > .workflow-vacancy {
   min-width: 160px;
   max-width: 280px;
   overflow: hidden;
@@ -233,6 +241,15 @@ textarea { min-height: 86px; resize: vertical; }
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.dashboard-approvals {
+  margin-top: 16px;
+}
+.approval-dashboard-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .portal-shortcuts {
   display: flex;
@@ -358,6 +375,45 @@ dialog::backdrop { background: rgba(16, 44, 59, 0.45); }
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+.candidate-processes {
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.field-title {
+  font-weight: 700;
+}
+.candidate-processes > div {
+  display: grid;
+  gap: 7px;
+}
+.candidate-process-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+.candidate-process-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.candidate-process-row strong,
+.candidate-process-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.candidate-process-row > div span {
+  color: var(--muted);
+  font-size: 12px;
 }
 .checkbox-group legend {
   padding: 0 5px;

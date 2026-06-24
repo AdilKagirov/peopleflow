@@ -180,6 +180,7 @@ function init() {
   $("#vacancyStatusFilter").addEventListener("change", renderVacancies);
   $("#candidateSearch").addEventListener("input", renderCandidates);
   $("#candidateStageFilter").addEventListener("change", renderCandidates);
+  $("#candidateApprovalFilter").addEventListener("change", renderCandidates);
   $("#approvalTypeFilter").addEventListener("change", renderApprovals);
   $("#approvalStatusFilter").addEventListener("change", renderApprovals);
   $("#refreshApprovals").addEventListener("click", refreshFromApi);
@@ -339,11 +340,12 @@ function dateOnly(value) {
 function renderDashboard() {
   const openVacancies = state.vacancies.filter((item) => item.status === "Открыта").length;
   const interviews = state.candidates.filter((item) => item.interviewAt).length;
+  const pendingApprovals = (state.approvals || []).filter((item) => item.status === "pending");
   $("#metrics").innerHTML = [
     ["Открытые вакансии", openVacancies],
     ["Кандидаты в базе", state.candidates.length],
     ["Запланированные интервью", interviews],
-    ["Средняя оценка", averageRating()],
+    ["На согласовании", pendingApprovals.length],
   ].map(metricCard).join("");
   $("#activeVacancies").innerHTML = state.vacancies
     .filter((item) => item.status === "Открыта")
@@ -354,6 +356,15 @@ function renderDashboard() {
     .sort((a, b) => a.interviewAt.localeCompare(b.interviewAt))
     .map((item) => `<article class="list-item"><strong>${item.name}</strong><p class="muted">${formatDateTime(item.interviewAt)} · ${item.vacancyTitle}</p></article>`)
     .join("") || empty("Интервью не запланированы");
+  $("#pendingApprovals").innerHTML = pendingApprovals
+    .map((item) => `<article class="list-item approval-dashboard-item">
+      <div>
+        <strong>${item.candidate.name}</strong>
+        <p class="muted">${item.vacancy.title} · ${approvalStatusLabel(item)}</p>
+      </div>
+      <span class="badge pause">${item.type === "customer" ? "Заказчик" : "СБ"}</span>
+    </article>`)
+    .join("") || empty("Нет кандидатов, ожидающих согласования");
 }
 
 function renderVacancies() {
@@ -396,14 +407,31 @@ function vacancyRow(item) {
 function renderCandidates() {
   const query = $("#candidateSearch")?.value.toLowerCase() || "";
   const stage = $("#candidateStageFilter")?.value || "";
+  const approval = $("#candidateApprovalFilter")?.value || "";
   const items = state.candidates.filter((item) => {
     const haystack = `${item.name} ${item.contacts} ${item.skills} ${item.tags}`.toLowerCase();
-    return haystack.includes(query) && (!stage || item.stages?.includes(stage) || item.stage === stage);
+    const matchesStage = !stage || item.stages?.includes(stage) || item.stage === stage;
+    return haystack.includes(query) && matchesStage && matchesCandidateApproval(item, approval);
   });
   $("#candidatesList").innerHTML = items.length ? candidateList(items) : empty("Кандидаты не найдены");
   $$(".edit-candidate").forEach((button) => button.addEventListener("click", () => candidateForm(button.dataset.id)));
   $$(".delete-candidate").forEach((button) => button.addEventListener("click", () => deleteCandidate(button.dataset.id)));
   $$(".request-approval").forEach((button) => button.addEventListener("click", () => requestApproval(button.dataset.id, button.dataset.type)));
+}
+
+function matchesCandidateApproval(candidate, filter) {
+  if (!filter) return true;
+  const approvals = (candidate.applications || [])
+    .map((application) => getLatestApproval(application.id))
+    .filter(Boolean);
+  if (filter === "none") return approvals.length === 0;
+  if (filter === "pending_customer") {
+    return approvals.some((approval) => approval.status === "pending" && approval.type === "customer");
+  }
+  if (filter === "pending_security") {
+    return approvals.some((approval) => approval.status === "pending" && approval.type === "security");
+  }
+  return approvals.some((approval) => approval.status === filter);
 }
 
 function candidateList(items) {
@@ -414,13 +442,8 @@ function candidateRow(item) {
   const stageLabel = item.applications?.length > 1
     ? formatVacancyCount(item.applications.length)
     : item.stage;
-  const workflowActions = item.applications?.length && canRequestApproval()
-    ? `<div class="application-workflows">${item.applications.map((application) => `
-        <div class="record-workflow-actions">
-          <span>${application.vacancy.title}</span>
-          <button class="workflow-button request-approval" data-id="${application.id}" data-type="customer">Заказчику</button>
-          <button class="workflow-button request-approval" data-id="${application.id}" data-type="security">В СБ</button>
-        </div>`).join("")}</div>`
+  const workflowActions = item.applications?.length
+    ? `<div class="application-workflows">${item.applications.map(applicationWorkflowRow).join("")}</div>`
     : "";
   return `<article class="record-row">
     <div class="record-main">
@@ -442,6 +465,51 @@ function candidateRow(item) {
       <button class="danger delete-candidate" data-id="${item.id}" ${can("Кандидаты") ? "" : "disabled"}>Удалить</button>
     </div>
   </article>`;
+}
+
+function applicationWorkflowRow(application) {
+  const status = getApplicationApprovalStatus(application.id);
+  const customer = getLatestApproval(application.id, "customer");
+  const security = getLatestApproval(application.id, "security");
+  const canSendCustomer = canRequestApproval() && (!customer || customer.status === "rejected");
+  const canSendSecurity = canRequestApproval() && customer?.status === "approved" && (!security || security.status === "rejected");
+  return `<div class="record-workflow-actions">
+    <span class="workflow-vacancy">${application.vacancy.title}</span>
+    <span class="badge ${status.className}">${status.label}</span>
+    ${canSendCustomer ? `<button class="workflow-button request-approval" data-id="${application.id}" data-type="customer">Заказчику</button>` : ""}
+    ${canSendSecurity ? `<button class="workflow-button request-approval" data-id="${application.id}" data-type="security">В СБ</button>` : ""}
+  </div>`;
+}
+
+function getLatestApproval(applicationId, type) {
+  return (state.approvals || [])
+    .filter((item) => item.applicationId === applicationId && (!type || item.type === type))
+    .sort((a, b) => String(b.requestedAt).localeCompare(String(a.requestedAt)))[0] || null;
+}
+
+function getApplicationApprovalStatus(applicationId) {
+  const approval = getLatestApproval(applicationId);
+  if (!approval) return { label: "Не отправлен", className: "neutral" };
+  if (approval.status === "pending") {
+    return {
+      label: approval.type === "customer" ? "На согласовании у заказчика" : "На проверке в СБ",
+      className: "pause",
+    };
+  }
+  if (approval.status === "rejected") {
+    return {
+      label: approval.type === "customer" ? "Отклонен заказчиком" : "Отклонен СБ",
+      className: "closed",
+    };
+  }
+  return {
+    label: approval.type === "customer" ? "Одобрен заказчиком" : "Проверка СБ пройдена",
+    className: "open",
+  };
+}
+
+function approvalStatusLabel(approval) {
+  return approval.type === "customer" ? "решение заказчика" : "проверка СБ";
 }
 
 function statusBadgeClass(status) {
@@ -731,6 +799,7 @@ function candidateForm(id) {
   openModal(id ? "Профиль кандидата" : "Новый кандидат", [
     field("name", "ФИО", item.name, true),
     field("contacts", "Контакты", item.contacts, true),
+    candidateProcessesField(item.applications || []),
     checkboxGroupField(
       "vacancyIds",
       "Вакансии кандидата",
@@ -850,6 +919,25 @@ function checkboxGroupField(name, label, options, selectedValues = []) {
     <legend>${label}</legend>
     <div class="checkbox-options">${controls}</div>
   </fieldset>`;
+}
+
+function candidateProcessesField(applications) {
+  const rows = applications.length
+    ? applications.map((application) => {
+      const status = getApplicationApprovalStatus(application.id);
+      return `<div class="candidate-process-row">
+        <div>
+          <strong>${application.vacancy.title}</strong>
+          <span>${application.stage?.name || "Этап не указан"}</span>
+        </div>
+        <span class="badge ${status.className}">${status.label}</span>
+      </div>`;
+    }).join("")
+    : `<span class="muted">Кандидат пока не привязан к вакансии</span>`;
+  return `<section class="form-field full candidate-processes">
+    <span class="field-title">Статусы по вакансиям</span>
+    <div>${rows}</div>
+  </section>`;
 }
 
 function getStageOptions() {
