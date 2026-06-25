@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { CreateInterviewDto } from './dto/create-interview.dto';
+import { UpdateInterviewDto } from './dto/update-interview.dto';
 import { InterviewsService } from './interviews.service';
 
 @Controller('interviews')
@@ -23,5 +24,9 @@ export class InterviewsController {
   create(@Body() dto: CreateInterviewDto) {
     return this.interviewsService.create(dto);
   }
-}
 
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateInterviewDto) {
+    return this.interviewsService.update(id, dto);
+  }
+}

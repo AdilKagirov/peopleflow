@@ -519,17 +519,29 @@ function renderDashboard() {
     .join("") || empty("Нет открытых вакансий");
   $("#upcomingInterviews").innerHTML = interviews
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-    .map((item) => `<article class="list-item"><strong>${item.candidate.name}</strong><p class="muted">${formatDateTime(item.startsAt)} · ${item.vacancy.title}</p></article>`)
+    .map((item) => `<article class="list-item dashboard-action-item">
+      <button type="button" class="link-card open-candidate-profile" data-id="${item.candidate.id}">
+        <strong>${item.candidate.name}</strong>
+        <p class="muted">${formatDateTime(item.startsAt)} · ${item.vacancy.title}</p>
+      </button>
+      <button type="button" class="ghost reschedule-interview" data-id="${item.id}">Перенести</button>
+    </article>`)
     .join("") || empty("Интервью не запланированы");
   $("#pendingApprovals").innerHTML = pendingApprovals
     .map((item) => `<article class="list-item approval-dashboard-item">
-      <div>
+      <button type="button" class="link-card open-candidate-profile" data-id="${item.candidate.id}">
         <strong>${item.candidate.name}</strong>
         <p class="muted">${item.vacancy.title} · ${approvalStatusLabel(item)}</p>
-      </div>
+      </button>
       <span class="badge pause">${item.type === "customer" ? "Заказчик" : "СБ"}</span>
     </article>`)
     .join("") || empty("Нет кандидатов, ожидающих согласования");
+  $$(".open-candidate-profile").forEach((button) => {
+    button.addEventListener("click", () => candidateForm(button.dataset.id));
+  });
+  $$(".reschedule-interview").forEach((button) => {
+    button.addEventListener("click", () => interviewForm(button.dataset.id));
+  });
 }
 
 function renderVacancies() {
@@ -1198,36 +1210,38 @@ async function candidateForm(id) {
   bindCandidateDocumentControls(id);
 }
 
-function interviewForm() {
+function interviewForm(id) {
   if (state.apiConnected && !state.applications?.length) {
     alert("Сначала привяжите кандидата к вакансии.");
     return;
   }
+  const item = (state.interviews || []).find((interview) => interview.id === id);
   const interviewOptions = state.apiConnected
     ? state.applications.map((item) => `${item.id}|${item.candidate.name} — ${item.vacancy.title}`)
     : state.candidates.map((item) => `${item.id}|${item.name} — ${item.vacancyTitle}`);
-  openModal("Запланировать интервью", [
+  openModal(id ? "Перенести интервью" : "Запланировать интервью", [
     selectField(
       "applicationId",
       "Кандидат и вакансия",
       interviewOptions,
+      item ? `${item.applicationId}|${item.candidate.name} — ${item.vacancy.title}` : "",
     ),
     selectField("interviewTypeCode", "Тип интервью", [
       "phone|Телефонное интервью",
       "hr|HR интервью",
       "manager|Интервью с руководителем",
       "final|Финальное интервью",
-    ], "manager|Интервью с руководителем"),
-    field("startsAt", "Начало", "", true, "datetime-local"),
-    field("endsAt", "Окончание", "", false, "datetime-local"),
-    field("location", "Место или комментарий", "", false, "text", true),
-    field("meetingUrl", "Ссылка на встречу", "", false, "url", true),
+    ], item?.type ? `${item.type.code}|${item.type.name}` : "manager|Интервью с руководителем"),
+    field("startsAt", "Начало", toDateTimeInputValue(item?.startsAt), true, "datetime-local"),
+    field("endsAt", "Окончание", toDateTimeInputValue(item?.endsAt), false, "datetime-local"),
+    field("location", "Место или комментарий", item?.location || "", false, "text", true),
+    field("meetingUrl", "Ссылка на встречу", item?.meetingUrl || "", false, "url", true),
   ], async (data) => {
     if (state.apiConnected) {
       const [applicationId] = data.applicationId.split("|");
       const [interviewTypeCode] = data.interviewTypeCode.split("|");
-      await apiFetch("/interviews", {
-        method: "POST",
+      await apiFetch(id ? `/interviews/${id}` : "/interviews", {
+        method: id ? "PATCH" : "POST",
         body: JSON.stringify({
           applicationId,
           interviewTypeCode,
@@ -1654,6 +1668,13 @@ function splitValues(value = "") {
 
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" }) : "";
+}
+
+function toDateTimeInputValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 function today() {

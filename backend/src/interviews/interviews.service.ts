@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { QueryResultRow } from 'pg';
 import { DatabaseService } from '../database/database.service';
 import { CreateInterviewDto } from './dto/create-interview.dto';
+import { UpdateInterviewDto } from './dto/update-interview.dto';
 
 interface InterviewRow extends QueryResultRow {
   id: string;
@@ -96,6 +97,49 @@ export class InterviewsService {
       ],
     );
     return this.findOne(result.rows[0].id);
+  }
+
+  async update(id: string, dto: UpdateInterviewDto) {
+    await this.findOne(id);
+    if (dto.startsAt !== undefined && (!dto.startsAt || Number.isNaN(Date.parse(dto.startsAt)))) {
+      throw new BadRequestException('startsAt must be a valid date');
+    }
+    if (dto.endsAt && Number.isNaN(Date.parse(dto.endsAt))) {
+      throw new BadRequestException('endsAt must be a valid date');
+    }
+    const startsAt = dto.startsAt ? Date.parse(dto.startsAt) : null;
+    const endsAt = dto.endsAt ? Date.parse(dto.endsAt) : null;
+    if (startsAt && endsAt && endsAt <= startsAt) {
+      throw new BadRequestException('endsAt must be later than startsAt');
+    }
+
+    let typeId: string | null | undefined;
+    if (dto.interviewTypeCode !== undefined) {
+      const type = await this.databaseService.query<{ id: string }>(
+        'select id from interview_types where code = $1',
+        [dto.interviewTypeCode],
+      );
+      if (!type.rows[0]) throw new BadRequestException('Interview type not found');
+      typeId = type.rows[0].id;
+    }
+
+    const values: Record<string, unknown> = {};
+    if (dto.startsAt !== undefined) values.starts_at = dto.startsAt;
+    if (dto.endsAt !== undefined) values.ends_at = dto.endsAt;
+    if (dto.location !== undefined) values.location = dto.location;
+    if (dto.meetingUrl !== undefined) values.meeting_url = dto.meetingUrl;
+    if (dto.status !== undefined) values.status = dto.status;
+    if (typeId !== undefined) values.interview_type_id = typeId;
+
+    const entries = Object.entries(values);
+    if (!entries.length) return this.findOne(id);
+
+    const assignments = entries.map(([key], index) => `${key} = $${index + 2}`);
+    await this.databaseService.query(
+      `update interviews set ${assignments.join(', ')} where id = $1`,
+      [id, ...entries.map(([, value]) => value)],
+    );
+    return this.findOne(id);
   }
 
   private baseQuery() {

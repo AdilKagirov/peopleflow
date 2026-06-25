@@ -230,6 +230,17 @@ describe('PeopleFlow API (e2e)', () => {
     expect(interviews.body).toHaveLength(1);
     expect(interviews.body[0].vacancy.id).toBe(vacancies.body[0].id);
 
+    const movedStartsAt = new Date(Date.now() + 172_800_000).toISOString();
+    const movedInterview = await request(app.getHttpServer())
+      .patch(`/api/interviews/${interview.body.id}`)
+      .send({
+        startsAt: movedStartsAt,
+        location: 'Moved E2E meeting room',
+      })
+      .expect(200);
+    expect(Date.parse(movedInterview.body.startsAt)).toBe(Date.parse(movedStartsAt));
+    expect(movedInterview.body.location).toBe('Moved E2E meeting room');
+
     await request(app.getHttpServer())
       .post(`/api/approvals/applications/${application.body.id}`)
       .send({ type: 'customer', comment: 'Missing resume' })
