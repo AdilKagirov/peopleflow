@@ -1202,6 +1202,7 @@ async function candidateForm(id) {
     field("contacts", "Контакты", item.contacts, true),
     candidateDocumentsField(id, item.documents || []),
     candidateProcessesField(item.applications || []),
+    candidateApprovalHistoryField(item.applications || []),
     candidateInterviewsField(item.interviews || []),
     checkboxGroupField(
       "vacancyIds",
@@ -1391,6 +1392,44 @@ function candidateProcessesField(applications) {
     <span class="field-title">Статусы по вакансиям</span>
     <div>${rows}</div>
   </section>`;
+}
+
+function candidateApprovalHistoryField(applications) {
+  const applicationIds = new Set(applications.map((application) => application.id));
+  const approvals = (state.approvals || [])
+    .filter((approval) => applicationIds.has(approval.applicationId))
+    .sort((a, b) => String(b.requestedAt).localeCompare(String(a.requestedAt)));
+
+  if (!approvals.length) {
+    return `<section class="form-field full candidate-processes">
+      <span class="field-title">История согласований</span>
+      <span class="muted">Кандидат еще не отправлялся на согласование</span>
+    </section>`;
+  }
+
+  const rows = approvals.map((approval) => {
+    const status = approvalStatusView(approval);
+    return `<div class="approval-history-row">
+      <div>
+        <strong>${approval.type === "customer" ? "Заказчик" : "СБ"} · ${approval.vacancy.title}</strong>
+        <span>${formatDateTime(approval.requestedAt)}${approval.decidedAt ? ` → ${formatDateTime(approval.decidedAt)}` : ""}</span>
+        <p>${approval.decisionComment || approval.requestComment || "Комментарий не указан"}</p>
+      </div>
+      <span class="badge ${status.className}">${status.label}</span>
+    </div>`;
+  }).join("");
+
+  return `<section class="form-field full candidate-processes">
+    <span class="field-title">История согласований</span>
+    <div>${rows}</div>
+  </section>`;
+}
+
+function approvalStatusView(approval) {
+  if (approval.status === "pending") return { label: "Ожидает решения", className: "pause" };
+  if (approval.status === "approved") return { label: "Одобрено", className: "open" };
+  if (approval.status === "rejected") return { label: "Отклонено", className: "closed" };
+  return { label: approval.status, className: "neutral" };
 }
 
 function candidateInterviewsField(interviews) {

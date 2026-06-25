@@ -514,6 +514,37 @@ dialog::backdrop { background: rgba(16, 44, 59, 0.45); }
   color: var(--muted);
   font-size: 12px;
 }
+.approval-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+.approval-history-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.approval-history-row strong,
+.approval-history-row span,
+.approval-history-row p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.approval-history-row span {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.approval-history-row p {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+}
 .candidate-documents {
   gap: 12px;
   padding: 14px;
