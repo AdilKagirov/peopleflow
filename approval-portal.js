@@ -116,6 +116,10 @@ function approvalItem(item) {
 async function openDocuments(id) {
   const approval = approvals.find((item) => item.id === id);
   if (!approval) return;
+  if (!$("#documentsDialog")) {
+    alert("Обновите страницу, чтобы открыть файлы кандидата.");
+    return;
+  }
 
   $("#documentsCandidate").textContent = approval.candidate.name;
   $("#documentsBody").innerHTML = `<div class="empty-state compact">Загрузка файлов...</div>`;
@@ -260,8 +264,8 @@ function init() {
   $("#decisionForm").addEventListener("submit", submitDecision);
   $("#closeDialog").addEventListener("click", closeDecision);
   $("#cancelDecision").addEventListener("click", closeDecision);
-  $("#closeDocuments").addEventListener("click", () => $("#documentsDialog").close());
-  $("#closeDocumentsFooter").addEventListener("click", () => $("#documentsDialog").close());
+  $("#closeDocuments")?.addEventListener("click", () => $("#documentsDialog")?.close());
+  $("#closeDocumentsFooter")?.addEventListener("click", () => $("#documentsDialog")?.close());
   window.addEventListener("focus", loadApprovals);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) loadApprovals();
