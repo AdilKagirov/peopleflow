@@ -4,10 +4,11 @@ const roles = ["Администратор", "Рекрутер", "Заказчи
 const permissions = ["Просмотр", "Редактирование", "Создание", "Кандидаты", "Согласование", "Аналитика"];
 const API_BASE = "http://localhost:3000/api";
 const candidateDocumentRequirements = [
-  { type: "resume", name: "Резюме" },
-  { type: "candidate_questionnaire", name: "Анкета кандидата" },
-  { type: "security_questionnaire", name: "Анкета СБ" },
-  { type: "credit_bureau_report", name: "Полный отчет кредитного бюро" },
+  { type: "resume", name: "Резюме", required: true },
+  { type: "candidate_questionnaire", name: "Анкета кандидата", required: true },
+  { type: "security_questionnaire", name: "Анкета СБ", required: true },
+  { type: "credit_bureau_report", name: "Полный отчет кредитного бюро", required: true },
+  { type: "additional_files", name: "Дополнительные файлы", required: false },
 ];
 
 const demo = {
@@ -652,7 +653,9 @@ function applicationWorkflowRow(application) {
   const candidate = state.candidates.find((item) => item.id === application.candidate.id);
   const documents = new Set(candidate?.documentTypes || []);
   const hasResume = documents.has("resume");
-  const hasSecurityPackage = candidateDocumentRequirements.every((item) => documents.has(item.type));
+  const hasSecurityPackage = candidateDocumentRequirements
+    .filter((item) => item.required)
+    .every((item) => documents.has(item.type));
   const canSendCustomer = canRequestApproval() && (!customer || customer.status === "rejected");
   const canSendSecurity = canRequestApproval() && customer?.status === "approved" && (!security || security.status === "rejected");
   return `<div class="record-workflow-actions">
@@ -1367,7 +1370,7 @@ function candidateDocumentsField(candidateId, documents) {
     return `<div class="candidate-document-row">
       <div class="candidate-document-heading">
         <strong>${requirement.name}</strong>
-        <span class="badge ${files.length ? "open" : "closed"}">${files.length ? "Загружено" : "Обязательно"}</span>
+        <span class="badge ${files.length ? "open" : requirement.required ? "closed" : "neutral"}">${files.length ? "Загружено" : requirement.required ? "Обязательно" : "Необязательно"}</span>
       </div>
       <div class="candidate-document-files">${fileList}</div>
     </div>`;

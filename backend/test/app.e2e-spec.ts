@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { hashPassword } from './../src/auth/password';
 import { DatabaseService } from './../src/database/database.service';
 
 describe('PeopleFlow API (e2e)', () => {
@@ -25,21 +26,35 @@ describe('PeopleFlow API (e2e)', () => {
   });
 
   it('authenticates active users with local credentials', async () => {
+    const admin = await databaseService.query<{ email: string }>(
+      `select u.email
+       from users u join roles r on r.id = u.role_id
+       where r.code = 'admin' and u.is_active = true
+       order by u.created_at
+       limit 1`,
+    );
+    expect(admin.rows[0]).toBeDefined();
+
+    await databaseService.query(
+      'update users set password_hash = $1 where email = $2',
+      [hashPassword('PeopleFlow2026!'), admin.rows[0].email],
+    );
+
     const login = await request(app.getHttpServer())
       .post('/api/auth/login')
       .send({
-        email: 'admin.peopleflow@kmf.kz',
+        email: admin.rows[0].email,
         password: 'PeopleFlow2026!',
       })
       .expect(201);
 
-    expect(login.body.user.email).toBe('admin.peopleflow@kmf.kz');
+    expect(login.body.user.email).toBe(admin.rows[0].email);
     expect(login.body.user.role.code).toBe('admin');
 
     await request(app.getHttpServer())
       .post('/api/auth/login')
       .send({
-        email: 'admin.peopleflow@kmf.kz',
+        email: admin.rows[0].email,
         password: 'wrong-password',
       })
       .expect(401);
