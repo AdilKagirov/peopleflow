@@ -199,6 +199,7 @@ function init() {
   $("#candidateStageFilter").addEventListener("change", renderCandidates);
   $("#candidateBranchFilter").addEventListener("change", renderCandidates);
   $("#candidateApprovalFilter").addEventListener("change", renderCandidates);
+  $("#resumeVacancy").addEventListener("change", syncResumeBranchSelection);
   $("#approvalTypeFilter").addEventListener("change", renderApprovals);
   $("#approvalStatusFilter").addEventListener("change", renderApprovals);
   $("#refreshApprovals").addEventListener("click", refreshFromApi);
@@ -314,12 +315,29 @@ function syncBranchFilters() {
   for (const selector of ["#vacancyBranchFilter", "#candidateBranchFilter"]) {
     const select = $(selector);
     const selected = select.value;
-    select.innerHTML = `<option value="">Все филиалы</option>` +
+    select.innerHTML = `<option value="">Все группы / филиалы</option>` +
       branches.map((branch) => `<option value="${branch.id}">${branch.name}</option>`).join("");
     if (branches.some((branch) => branch.id === selected)) select.value = selected;
     const user = state.reference?.users?.find((item) => item.id === currentUserId());
     select.disabled = !user?.accessAllBranches;
   }
+}
+
+function currentUser() {
+  return state.reference?.users?.find((item) => item.id === currentUserId()) || null;
+}
+
+function accessibleBranches() {
+  const branches = state.reference?.branches || [];
+  const user = currentUser();
+  if (!user || user.accessAllBranches) return branches;
+
+  const ids = new Set((user.branches || []).map((branch) => branch.id));
+  if (user.branch?.id) ids.add(user.branch.id);
+  if (user.primaryBranch?.id) ids.add(user.primaryBranch.id);
+
+  const scoped = branches.filter((branch) => ids.has(branch.id));
+  return scoped.length ? scoped : branches.filter((branch) => branch.id === user.branch?.id);
 }
 
 function syncReferenceFilters() {
@@ -341,6 +359,29 @@ function syncResumeVacancyOptions() {
   select.innerHTML = `<option value="">Импорт без вакансии</option>` +
     state.vacancies.map((vacancy) => `<option value="${vacancy.id}">${vacancy.title}</option>`).join("");
   if (state.vacancies.some((vacancy) => vacancy.id === selected)) select.value = selected;
+
+  const branchSelect = $("#resumeBranch");
+  if (!branchSelect) return;
+  const selectedBranch = branchSelect.value;
+  const branches = accessibleBranches();
+  branchSelect.innerHTML = `<option value="">Группа импорта</option>` +
+    branches.map((branch) => `<option value="${branch.id}">${branch.name}</option>`).join("");
+  const fallbackBranch = defaultBranch();
+  if (branches.some((branch) => branch.id === selectedBranch)) {
+    branchSelect.value = selectedBranch;
+  } else if (fallbackBranch) {
+    branchSelect.value = fallbackBranch.id;
+  }
+  syncResumeBranchSelection();
+}
+
+function syncResumeBranchSelection() {
+  const vacancyId = $("#resumeVacancy")?.value;
+  const branchSelect = $("#resumeBranch");
+  if (!branchSelect) return;
+  const vacancy = state.vacancies.find((item) => item.id === vacancyId);
+  if (vacancy?.branch?.id) branchSelect.value = vacancy.branch.id;
+  branchSelect.disabled = Boolean(vacancyId);
 }
 
 function mapApiVacancy(item) {
@@ -466,6 +507,7 @@ function vacancyRow(item) {
       <div class="record-title">
         <strong>${item.title}</strong>
         <span class="badge ${badgeClass}">${item.status}</span>
+        <span class="badge neutral">${item.branch?.name || "Группа не указана"}</span>
       </div>
       <div class="record-details">
         <span>${item.position}</span>
@@ -537,6 +579,7 @@ function candidateRow(item) {
       <div class="record-title">
         <strong>${item.name}</strong>
         <span class="badge open">${stageLabel}</span>
+        <span class="badge neutral">${item.branch?.name || "Группа не указана"}</span>
       </div>
       <div class="record-details">
         <span>${item.contacts}</span>
@@ -864,8 +907,8 @@ function apiRoleToUiRole(name) {
 }
 
 function defaultBranch() {
-  const user = state.reference?.users?.find((item) => item.id === currentUserId());
-  return user?.branch || state.reference?.branches?.find((item) => item.isHeadOffice) || null;
+  const user = currentUser();
+  return user?.branch || user?.primaryBranch || accessibleBranches()[0] || state.reference?.branches?.find((item) => item.isHeadOffice) || null;
 }
 
 function renderMessages() {
@@ -997,8 +1040,9 @@ function renderRoles() {
 function vacancyForm(id) {
   const item = state.vacancies.find((vacancy) => vacancy.id === id) || {};
   const selectedBranch = item.branch || defaultBranch();
+  const branchOptions = accessibleBranches().map((branch) => `${branch.id}|${branch.name}`);
   openModal(id ? "Редактировать вакансию" : "Новая вакансия", [
-    selectField("branchId", "Филиал", (state.reference?.branches || []).map((branch) => `${branch.id}|${branch.name}`), selectedBranch ? `${selectedBranch.id}|${selectedBranch.name}` : ""),
+    selectField("branchId", "Группа / филиал", branchOptions, selectedBranch ? `${selectedBranch.id}|${selectedBranch.name}` : ""),
     field("title", "Название", item.title, true),
     field("department", "Отдел", item.department, true),
     field("position", "Должность", item.position, true),
@@ -1050,8 +1094,9 @@ async function candidateForm(id) {
       .filter((vacancy) => vacancy.title === item.vacancyTitle)
       .map((vacancy) => vacancy.id);
   const selectedBranch = item.branch || defaultBranch();
+  const branchOptions = accessibleBranches().map((branch) => `${branch.id}|${branch.name}`);
   openModal(id ? "Профиль кандидата" : "Новый кандидат", [
-    selectField("branchId", "Филиал", (state.reference?.branches || []).map((branch) => `${branch.id}|${branch.name}`), selectedBranch ? `${selectedBranch.id}|${selectedBranch.name}` : ""),
+    selectField("branchId", "Группа / филиал", branchOptions, selectedBranch ? `${selectedBranch.id}|${selectedBranch.name}` : ""),
     field("name", "ФИО", item.name, true),
     field("contacts", "Контакты", item.contacts, true),
     candidateDocumentsField(id, item.documents || []),
@@ -1468,6 +1513,8 @@ async function importResume(event) {
       form.append("resume", file);
       const vacancyId = $("#resumeVacancy")?.value;
       if (vacancyId) form.append("vacancyId", vacancyId);
+      const branchId = $("#resumeBranch")?.value;
+      if (branchId) form.append("branchId", branchId);
       await apiFetch("/imports/resumes", { method: "POST", body: form });
       event.target.value = "";
       await refreshFromApi();

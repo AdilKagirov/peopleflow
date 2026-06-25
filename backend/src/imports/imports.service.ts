@@ -10,6 +10,7 @@ import { ParsedResume, parseResumeText } from './resume-parser';
 
 interface ImportOptions {
   vacancyId?: string;
+  branchId?: string;
   userId?: string;
 }
 
@@ -30,7 +31,7 @@ export class ImportsService {
     const sourceId = await this.ensureSource('file_import', 'Импорт файла');
     const branchId = options.vacancyId
       ? await this.getVacancyBranchId(options.vacancyId)
-      : await this.accessScopeService.getPrimaryBranchId(options.userId);
+      : options.branchId || await this.accessScopeService.getPrimaryBranchId(options.userId);
     await this.accessScopeService.assertBranchAccess(options.userId, branchId);
     const candidateId = await this.upsertCandidate(parsed, sourceId, branchId);
     const attachmentId = await this.createAttachment(file, candidateId);

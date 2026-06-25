@@ -31,6 +31,12 @@ interface UserRow extends QueryResultRow {
   branch_code: string | null;
   branch_name: string | null;
   access_all_branches: boolean;
+  branches: Array<{
+    id: string;
+    code: string;
+    name: string;
+    isPrimary: boolean;
+  }>;
 }
 
 @Injectable()
@@ -149,12 +155,21 @@ export class ReferenceService {
         r.code as role_code, r.name as role_name,
         d.id as department_id, d.name as department_name,
         b.id as branch_id, b.code as branch_code, b.name as branch_name,
-        u.access_all_branches
+        u.access_all_branches,
+        coalesce(
+          jsonb_agg(distinct jsonb_build_object(
+            'id', ab.id, 'code', ab.code, 'name', ab.name, 'isPrimary', uba.is_primary
+          )) filter (where ab.id is not null),
+          '[]'::jsonb
+        ) as branches
       from users u
       left join roles r on r.id = u.role_id
       left join departments d on d.id = u.department_id
       left join branches b on b.id = u.branch_id
+      left join user_branch_access uba on uba.user_id = u.id
+      left join branches ab on ab.id = uba.branch_id
       where u.is_active = true
+      group by u.id, r.code, r.name, d.id, d.name, b.id, b.code, b.name
       order by u.full_name`,
     );
 
@@ -169,6 +184,7 @@ export class ReferenceService {
       branch: row.branch_id
         ? { id: row.branch_id, code: row.branch_code, name: row.branch_name }
         : null,
+      branches: row.branches,
       accessAllBranches: row.access_all_branches,
     }));
   }

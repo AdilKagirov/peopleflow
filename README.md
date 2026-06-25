@@ -72,6 +72,8 @@ Interview planning is stored in PostgreSQL and linked to a specific candidate ap
 
 PeopleFlow uses one database with branch-scoped access. Branch recruiters see only vacancies, applications, approvals, documents, and candidates belonging to their assigned branches. Head-office recruiters and administrators have access to every branch. A user can be assigned to multiple branches through `user_branch_access`, which also supports temporary replacement recruiters.
 
+Recruiters can manually select the `Group / branch` in vacancy and candidate forms. During resume import without a vacancy, the import toolbar also allows selecting the candidate group. If a vacancy is selected, its group is used automatically. The backend verifies the current user's access before saving the assignment.
+
 The prototype sends the selected user through this request header:
 
 ```text
@@ -185,6 +187,7 @@ Manual resume upload endpoint:
 POST http://localhost:3000/api/imports/resumes
 field: resume
 optional field: vacancyId
+optional field: branchId
 ```
 
 The implementation stores uploaded PDF/DOC/DOCX/TXT files, creates or updates a candidate, creates an attachment and resume record, and links the candidate to a vacancy only when `vacancyId` is explicitly selected. Text PDFs, DOCX files, TXT files, and RTF documents saved with a `.doc` extension are parsed automatically. The parser extracts the candidate name, contacts, city, desired position, experience, education, and skills. Scanned PDFs without a text layer and unsupported legacy binary DOC files are marked for manual review instead of using the filename as the candidate name.

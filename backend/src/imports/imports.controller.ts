@@ -46,12 +46,13 @@ export class ImportsController {
   importResume(
     @UploadedFile() file: Express.Multer.File,
     @Body('vacancyId') vacancyId?: string,
+    @Body('branchId') branchId?: string,
     @Headers('x-peopleflow-user-id') userId?: string,
   ) {
     if (!file) {
       throw new BadRequestException('Resume file is required');
     }
 
-    return this.importsService.importResumeFile(file, { vacancyId, userId });
+    return this.importsService.importResumeFile(file, { vacancyId, branchId, userId });
   }
 }
