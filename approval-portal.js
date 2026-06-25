@@ -61,6 +61,8 @@ function approvalItem(item) {
     approved: "Одобрено",
     rejected: "Отклонено",
   }[item.status] || item.status;
+  const decisionDate = item.decidedAt ? formatDate(item.decidedAt) : "Решение еще не принято";
+  const stageName = item.currentStage?.name || "Этап не указан";
   const actions = item.status === "pending"
     ? `<div class="approval-actions">
         <button class="approve" data-id="${item.id}" data-decision="approved">Одобрить</button>
@@ -73,11 +75,26 @@ function approvalItem(item) {
       <div class="approval-title">
         <strong>${escapeHtml(item.candidate.name)}</strong>
         <span class="badge ${item.status}">${statusLabel}</span>
+        <span class="stage-badge">${escapeHtml(stageName)}</span>
+      </div>
+      <div class="status-strip">
+        <div>
+          <span>Статус решения</span>
+          <strong>${escapeHtml(statusLabel)}</strong>
+        </div>
+        <div>
+          <span>Статус подбора</span>
+          <strong>${escapeHtml(stageName)}</strong>
+        </div>
+        <div>
+          <span>${item.status === "pending" ? "Запрошено" : "Дата решения"}</span>
+          <strong>${escapeHtml(item.status === "pending" ? formatDate(item.requestedAt) : decisionDate)}</strong>
+        </div>
       </div>
       <div class="approval-details">
         <span>${escapeHtml(item.vacancy.title)}</span>
         <span>${escapeHtml(item.candidate.email || "Email не указан")}</span>
-        <span>${escapeHtml(item.currentStage?.name || "Этап не указан")}</span>
+        <span>${escapeHtml(item.recruiter?.name || "Рекрутер не указан")}</span>
         <span>${formatDate(item.requestedAt)}</span>
       </div>
       <p class="approval-comment">${escapeHtml(item.requestComment || item.decisionComment || "Комментарий не указан")}</p>

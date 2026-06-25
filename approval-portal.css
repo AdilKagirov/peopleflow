@@ -94,6 +94,39 @@ h1 { margin-bottom: 7px; font-size: 30px; }
 .badge.pending { color: var(--amber); background: var(--amber-soft); }
 .badge.approved { color: var(--green); background: var(--green-soft); }
 .badge.rejected { color: var(--red); background: var(--red-soft); }
+.stage-badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--primary-dark);
+  background: #e6f2f6;
+  font-size: 12px;
+}
+.status-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+.status-strip div {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+.status-strip span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.status-strip strong {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .approval-details { display: flex; flex-wrap: wrap; gap: 7px 16px; color: var(--muted); font-size: 13px; }
 .approval-comment { margin: 9px 0 0; color: var(--text); font-size: 13px; }
 .approval-actions { display: flex; gap: 8px; }
@@ -116,5 +149,5 @@ dialog::backdrop { background: rgba(18, 45, 59, 0.45); }
   .segment { border-bottom: 1px solid var(--line); }
   .approval-item { grid-template-columns: 1fr; }
   .approval-actions { justify-content: flex-start; }
+  .status-strip { grid-template-columns: 1fr; }
 }
-
