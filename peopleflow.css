@@ -33,12 +33,15 @@ button { border: 0; cursor: pointer; }
 
 .login-screen {
   min-height: 100vh;
-  display: grid;
+  display: none;
   place-items: center;
   padding: 24px;
   background:
     linear-gradient(135deg, rgba(16, 44, 59, 0.95), rgba(23, 107, 135, 0.86)),
     #102c3b;
+}
+body.auth-locked .login-screen {
+  display: grid;
 }
 .login-panel {
   width: min(420px, 100%);
