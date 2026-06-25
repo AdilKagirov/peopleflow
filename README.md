@@ -20,7 +20,14 @@ Open:
 http://localhost:8000/peopleflow.html
 ```
 
-If the backend is running on `http://localhost:3000`, the prototype loads vacancies, candidates, applications, and reference data from PostgreSQL through the API. If the backend is not running, it falls back to local demo data in the browser.
+If the backend is running on `http://localhost:3000`, the prototype opens after login and loads vacancies, candidates, applications, and reference data from PostgreSQL through the API.
+
+Default local administrator:
+
+```text
+Email: admin.peopleflow@kmf.kz
+Password: PeopleFlow2026!
+```
 
 ## Start PostgreSQL
 
@@ -56,6 +63,7 @@ Backend URLs:
 ```text
 http://localhost:3000/api
 http://localhost:3000/api/health
+http://localhost:3000/api/auth/login
 http://localhost:3000/api/vacancies
 http://localhost:3000/api/candidates
 http://localhost:3000/api/applications
@@ -66,7 +74,16 @@ http://localhost:3000/api/reference
 
 The health endpoint checks the PostgreSQL connection when the database container is running.
 
+Apply pending database migrations after pulling changes:
+
+```bash
+cd /Users/adilkagirov/Documents/hr/backend
+npm run db:migrate
+```
+
 Interview planning is stored in PostgreSQL and linked to a specific candidate application. Scheduled interviews remain available after a page refresh and are shown on the dashboard and in the candidate profile.
+
+Administrators can create recruiter, hiring manager, security, and branch HR accounts from the `Users` section. The password field is required for a new account and optional when editing an existing account.
 
 ## Branch Access
 
@@ -74,7 +91,7 @@ PeopleFlow uses one database with branch-scoped access. Branch recruiters see on
 
 Recruiters can manually select the `Group / branch` in vacancy and candidate forms. During resume import without a vacancy, the import toolbar also allows selecting the candidate group. If a vacancy is selected, its group is used automatically. The backend verifies the current user's access before saving the assignment.
 
-The prototype sends the selected user through this request header:
+After login, the frontend sends the authenticated user through this request header:
 
 ```text
 X-PeopleFlow-User-Id: <user UUID>

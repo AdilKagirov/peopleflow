@@ -1,6 +1,7 @@
 export class CreateUserDto {
   fullName!: string;
   email!: string;
+  password?: string;
   phone?: string;
   roleCode!: string;
   branchIds?: string[];
@@ -8,4 +9,3 @@ export class CreateUserDto {
   accessAllBranches?: boolean;
   isActive?: boolean;
 }
-

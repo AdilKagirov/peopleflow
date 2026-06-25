@@ -6,7 +6,34 @@
     <title>KMF PeopleFlow</title>
     <link rel="stylesheet" href="peopleflow.css" />
   </head>
-  <body>
+  <body class="auth-locked">
+    <section class="login-screen" id="loginScreen">
+      <form class="login-panel" id="loginForm">
+        <div class="brand login-brand">
+          <div class="brand-mark">K</div>
+          <div>
+            <strong>KMF PeopleFlow</strong>
+            <span>KMF Bank · подбор персонала</span>
+          </div>
+        </div>
+        <div>
+          <p class="eyebrow">Вход в систему</p>
+          <h1>Авторизация</h1>
+        </div>
+        <label class="form-field">
+          <span>Email</span>
+          <input id="loginEmail" type="email" autocomplete="username" required />
+        </label>
+        <label class="form-field">
+          <span>Пароль</span>
+          <input id="loginPassword" type="password" autocomplete="current-password" required />
+        </label>
+        <p class="login-error" id="loginError"></p>
+        <button class="primary" type="submit">Войти</button>
+        <p class="muted">Для демо-администратора: admin.peopleflow@kmf.kz / PeopleFlow2026!</p>
+      </form>
+    </section>
+
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">K</div>
@@ -27,10 +54,10 @@
         <button class="nav-item" data-view="settings">Роли</button>
       </nav>
       <div class="role-card">
-        <label for="userSelect">Текущий пользователь</label>
-        <select id="userSelect"></select>
-        <label for="roleSelect">Текущая роль</label>
-        <select id="roleSelect"></select>
+        <span>Вы вошли как</span>
+        <strong id="currentUserName">-</strong>
+        <small id="currentUserRole">-</small>
+        <button class="ghost" id="logoutButton" type="button">Выйти</button>
       </div>
     </aside>
 

@@ -134,6 +134,11 @@ const demo = {
 };
 
 let state = loadState();
+let session = loadSession();
+if (session?.user) {
+  state.currentUserId = session.user.id;
+  if (session.user.role?.name) state.role = apiRoleToUiRole(session.user.role.name);
+}
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
@@ -162,30 +167,33 @@ function saveState() {
   localStorage.setItem("peopleflow-state", JSON.stringify(state));
 }
 
+function loadSession() {
+  const saved = localStorage.getItem("peopleflow-session");
+  return saved ? JSON.parse(saved) : null;
+}
+
+function saveSession(nextSession) {
+  session = nextSession;
+  if (nextSession) localStorage.setItem("peopleflow-session", JSON.stringify(nextSession));
+  else localStorage.removeItem("peopleflow-session");
+}
+
 function init() {
-  $("#roleSelect").innerHTML = roles.map((role) => `<option>${role}</option>`).join("");
-  $("#roleSelect").value = state.role;
+  $("#loginForm").addEventListener("submit", login);
+  $("#logoutButton").addEventListener("click", logout);
+  if (!session?.user) return;
+
+  document.body.classList.remove("auth-locked");
   $("#vacancyStatusFilter").innerHTML += vacancyStatuses.map((status) => `<option>${status}</option>`).join("");
   $("#candidateStageFilter").innerHTML += stages.map((stage) => `<option>${stage}</option>`).join("");
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
   $$("[data-view-jump]").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.viewJump)));
-  $("#roleSelect").addEventListener("change", (event) => {
-    state.role = event.target.value;
-    const roleCode = roleNameToCode(state.role);
-    const user = state.reference?.users?.find((item) => item.role?.code === roleCode);
-    if (user) state.currentUserId = user.id;
-    saveState();
-    refreshFromApi();
-  });
-  $("#userSelect").addEventListener("change", (event) => {
-    state.currentUserId = event.target.value;
-    const user = state.reference?.users?.find((item) => item.id === state.currentUserId);
-    if (user?.role?.name) state.role = apiRoleToUiRole(user.role.name);
-    saveState();
-    refreshFromApi();
-  });
   $("#resetDemo").addEventListener("click", () => {
     state = structuredClone(demo);
+    if (session?.user) {
+      state.currentUserId = session.user.id;
+      if (session.user.role?.name) state.role = apiRoleToUiRole(session.user.role.name);
+    }
     saveState();
     render();
   });
@@ -218,6 +226,46 @@ function init() {
   refreshFromApi();
 }
 
+async function login(event) {
+  event.preventDefault();
+  const error = $("#loginError");
+  error.textContent = "";
+  const button = event.currentTarget.querySelector("button[type='submit']");
+  button.disabled = true;
+  try {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: $("#loginEmail").value.trim(),
+        password: $("#loginPassword").value,
+      }),
+    });
+    if (!response.ok) throw new Error("Неверный email или пароль");
+
+    const authSession = await response.json();
+    saveSession(authSession);
+    state.currentUserId = authSession.user.id;
+    if (authSession.user.role?.name) state.role = apiRoleToUiRole(authSession.user.role.name);
+    saveState();
+    document.body.classList.remove("auth-locked");
+    initAuthenticatedUi();
+  } catch (loginError) {
+    error.textContent = loginError.message || "Не удалось войти";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function initAuthenticatedUi() {
+  window.location.reload();
+}
+
+function logout() {
+  saveSession(null);
+  window.location.reload();
+}
+
 function switchView(view) {
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
   $$(".view").forEach((section) => section.classList.remove("active"));
@@ -230,7 +278,6 @@ function can(permission) {
 }
 
 function render() {
-  $("#roleSelect").value = state.role;
   renderDashboard();
   renderVacancies();
   renderCandidates();
@@ -302,12 +349,12 @@ async function apiFetch(path, options = {}) {
 }
 
 function syncUserSelector() {
-  const users = state.reference?.users || [];
-  $("#userSelect").innerHTML = users.map((user) =>
-    `<option value="${user.id}">${user.fullName} · ${user.branch?.name || "Все филиалы"}</option>`
-  ).join("");
-  $("#userSelect").value = state.currentUserId || "";
-  $("#roleSelect").value = state.role;
+  const user = currentUser() || session?.user;
+  $("#currentUserName").textContent = user?.fullName || "-";
+  $("#currentUserRole").textContent = [
+    user?.role?.name || state.role || "Роль не указана",
+    user?.branch?.name || (user?.accessAllBranches ? "Все филиалы" : ""),
+  ].filter(Boolean).join(" · ");
 }
 
 function syncBranchFilters() {
@@ -986,6 +1033,7 @@ function userForm(id) {
   openModal(id ? "Редактировать пользователя" : "Новый пользователь", [
     field("fullName", "ФИО", item.fullName, true),
     field("email", "Email", item.email, true, "email"),
+    field("password", id ? "Новый пароль" : "Пароль", "", !id, "password"),
     field("phone", "Телефон", item.phone),
     selectField(
       "roleCode",
@@ -1011,6 +1059,7 @@ function userForm(id) {
     const payload = {
       fullName: data.fullName,
       email: data.email,
+      password: data.password || undefined,
       phone: data.phone || null,
       roleCode: data.roleCode.split("|")[0],
       branchIds: data.branchIds,

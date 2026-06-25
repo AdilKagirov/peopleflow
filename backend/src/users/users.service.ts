@@ -8,6 +8,7 @@ import {
 import { QueryResultRow } from 'pg';
 import { compact } from '../common/sql';
 import { DatabaseService } from '../database/database.service';
+import { hashPassword } from '../auth/password';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -62,9 +63,9 @@ export class UsersService {
     try {
       const result = await this.databaseService.query<{ id: string }>(
         `insert into users (
-          branch_id, role_id, full_name, email, phone,
+          branch_id, role_id, full_name, email, phone, password_hash,
           access_all_branches, is_active
-        ) values ($1, $2, $3, lower($4), $5, $6, $7)
+        ) values ($1, $2, $3, lower($4), $5, $6, $7, $8)
         returning id`,
         [
           dto.primaryBranchId || branchIds[0] || null,
@@ -72,6 +73,7 @@ export class UsersService {
           dto.fullName,
           dto.email,
           dto.phone || null,
+          dto.password ? hashPassword(dto.password) : null,
           dto.accessAllBranches ?? false,
           dto.isActive ?? true,
         ],
@@ -98,6 +100,7 @@ export class UsersService {
       is_active: dto.isActive,
       branch_id: dto.primaryBranchId,
     });
+    if (dto.password) values.password_hash = hashPassword(dto.password);
     if (dto.roleCode !== undefined) values.role_id = await this.lookupRoleId(dto.roleCode);
     let branchAssignment: { branchIds: string[]; primaryBranchId?: string } | null = null;
     if (dto.branchIds !== undefined) {

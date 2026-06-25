@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApplicationsModule } from './applications/applications.module';
 import { ApprovalsModule } from './approvals/approvals.module';
+import { AuthModule } from './auth/auth.module';
 import { CandidatesModule } from './candidates/candidates.module';
 import { DatabaseModule } from './database/database.module';
 import { HhIntegrationModule } from './integrations/hh/hh-integration.module';
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module';
     ConfigModule.forRoot({ isGlobal: true }),
     AccessScopeModule,
     DatabaseModule,
+    AuthModule,
     VacanciesModule,
     CandidatesModule,
     ApplicationsModule,

@@ -21,8 +21,47 @@ body {
   display: grid;
   grid-template-columns: 276px minmax(0, 1fr);
 }
+body.auth-locked {
+  display: block;
+}
+body.auth-locked .sidebar,
+body.auth-locked .app {
+  display: none;
+}
 button, input, select, textarea { font: inherit; }
 button { border: 0; cursor: pointer; }
+
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(16, 44, 59, 0.95), rgba(23, 107, 135, 0.86)),
+    #102c3b;
+}
+.login-panel {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 18px;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+.login-brand strong,
+.login-brand span {
+  color: var(--text);
+}
+.login-panel .primary {
+  min-height: 44px;
+}
+.login-error {
+  min-height: 18px;
+  color: #8b2f24;
+  font-size: 13px;
+}
 
 .sidebar {
   min-height: 100vh;
@@ -44,7 +83,7 @@ button { border: 0; cursor: pointer; }
   background: #f7c66b;
   font-weight: 800;
 }
-.brand span, .role-card label, .eyebrow {
+.brand span, .role-card span, .role-card small, .eyebrow {
   display: block;
   color: rgba(255, 255, 255, 0.68);
   font-size: 12px;
@@ -64,8 +103,18 @@ button { border: 0; cursor: pointer; }
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
+  display: grid;
+  gap: 8px;
 }
-.role-card select { width: 100%; margin-top: 8px; }
+.role-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.role-card .ghost {
+  width: 100%;
+  margin-top: 4px;
+}
 .app { min-width: 0; padding: 28px; }
 .topbar {
   display: flex;

@@ -24,6 +24,27 @@ describe('PeopleFlow API (e2e)', () => {
     await app.init();
   });
 
+  it('authenticates active users with local credentials', async () => {
+    const login = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: 'admin.peopleflow@kmf.kz',
+        password: 'PeopleFlow2026!',
+      })
+      .expect(201);
+
+    expect(login.body.user.email).toBe('admin.peopleflow@kmf.kz');
+    expect(login.body.user.role.code).toBe('admin');
+
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: 'admin.peopleflow@kmf.kz',
+        password: 'wrong-password',
+      })
+      .expect(401);
+  });
+
   it('isolates branch data and imports approved Websoft vacancies idempotently', async () => {
     const reference = await request(app.getHttpServer()).get('/api/reference').expect(200);
     const astana = reference.body.branches.find((item: { code: string }) => item.code === 'AST');
@@ -54,6 +75,7 @@ describe('PeopleFlow API (e2e)', () => {
       .send({
         fullName: 'E2E Branch Recruiter',
         email: `e2e.branch.recruiter.${Date.now()}@kmf.kz`,
+        password: 'PeopleFlow2026!',
         roleCode: 'recruiter',
         branchIds: [astana.id, almaty.id],
         primaryBranchId: astana.id,

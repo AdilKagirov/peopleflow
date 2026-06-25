@@ -1,6 +1,7 @@
 export class UpdateUserDto {
   fullName?: string;
   email?: string;
+  password?: string;
   phone?: string | null;
   roleCode?: string;
   branchIds?: string[];
@@ -8,4 +9,3 @@ export class UpdateUserDto {
   accessAllBranches?: boolean;
   isActive?: boolean;
 }
-

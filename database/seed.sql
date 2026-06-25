@@ -156,12 +156,18 @@ VALUES
   ('rejection', 'Отказ', 'Статус по вакансии {{vacancy_title}}', 'Здравствуйте, {{candidate_name}}! Спасибо за интерес к KMF Bank. Сейчас мы не готовы продолжить процесс.')
 ON CONFLICT (code) DO NOTHING;
 
-INSERT INTO users (branch_id, department_id, role_id, full_name, email, phone, access_all_branches)
-SELECT d.branch_id, d.id, r.id, 'Администратор KMF', 'admin.peopleflow@kmf.kz', '+7 700 000 00 00', true
+INSERT INTO users (branch_id, department_id, role_id, full_name, email, phone, password_hash, access_all_branches)
+SELECT d.branch_id, d.id, r.id, 'Администратор KMF', 'admin.peopleflow@kmf.kz', '+7 700 000 00 00',
+       'pbkdf2_sha256$120000$peopleflow-demo-salt-2026$afad7f92fb501a19a9eccded68a7cb6a006c14d57784c77bb74713fd0bdeeef8',
+       true
 FROM departments d
 JOIN roles r ON r.code = 'admin'
 WHERE d.name = 'HR'
 ON CONFLICT (email) DO NOTHING;
+
+UPDATE users
+SET password_hash = 'pbkdf2_sha256$120000$peopleflow-demo-salt-2026$afad7f92fb501a19a9eccded68a7cb6a006c14d57784c77bb74713fd0bdeeef8'
+WHERE email = 'admin.peopleflow@kmf.kz' AND password_hash IS NULL;
 
 INSERT INTO vacancies (
   branch_id, department_id, hiring_manager_id, recruiter_id, status_id, employment_type_id,
