@@ -3,6 +3,9 @@ const approvalType = document.body.dataset.approvalType;
 const labels = approvalType === "customer"
   ? { queue: "Заказчик", comment: "Комментарий заказчика" }
   : { queue: "Служба безопасности", comment: "Заключение СБ" };
+const documentAccess = approvalType === "customer"
+  ? new Set(["resume", "additional_files"])
+  : null;
 
 let approvals = [];
 let activeStatus = "pending";
@@ -42,6 +45,9 @@ function render() {
   $$("[data-decision]").forEach((button) => {
     button.addEventListener("click", () => openDecision(button.dataset.id, button.dataset.decision));
   });
+  $$(".open-documents").forEach((button) => {
+    button.addEventListener("click", () => openDocuments(button.dataset.id));
+  });
 }
 
 function renderSummary() {
@@ -65,10 +71,14 @@ function approvalItem(item) {
   const stageName = item.currentStage?.name || "Этап не указан";
   const actions = item.status === "pending"
     ? `<div class="approval-actions">
+        <button class="secondary open-documents" data-id="${item.id}">Файлы</button>
         <button class="approve" data-id="${item.id}" data-decision="approved">Одобрить</button>
         <button class="reject" data-id="${item.id}" data-decision="rejected">Отклонить</button>
       </div>`
-    : `<div class="approval-actions"><span class="badge ${item.status}">${statusLabel}</span></div>`;
+    : `<div class="approval-actions">
+        <button class="secondary open-documents" data-id="${item.id}">Файлы</button>
+        <span class="badge ${item.status}">${statusLabel}</span>
+      </div>`;
 
   return `<article class="approval-item">
     <div>
@@ -101,6 +111,57 @@ function approvalItem(item) {
     </div>
     ${actions}
   </article>`;
+}
+
+async function openDocuments(id) {
+  const approval = approvals.find((item) => item.id === id);
+  if (!approval) return;
+
+  $("#documentsCandidate").textContent = approval.candidate.name;
+  $("#documentsBody").innerHTML = `<div class="empty-state compact">Загрузка файлов...</div>`;
+  $("#documentsDialog").showModal();
+
+  try {
+    const documents = await apiFetch(`/candidates/${approval.candidate.id}/documents`);
+    const visibleDocuments = documentAccess
+      ? documents.filter((document) => documentAccess.has(document.type))
+      : documents;
+    $("#documentsBody").innerHTML = renderDocuments(approval, visibleDocuments);
+  } catch (error) {
+    $("#documentsBody").innerHTML = `<div class="empty-state compact">Не удалось загрузить файлы: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function renderDocuments(approval, documents) {
+  if (!documents.length) {
+    return `<div class="empty-state compact">Для этой роли нет доступных файлов кандидата</div>`;
+  }
+
+  const groups = documents.reduce((result, document) => {
+    const label = document.typeName || documentTypeLabel(document.type);
+    result[label] = [...(result[label] || []), document];
+    return result;
+  }, {});
+
+  return Object.entries(groups).map(([label, files]) => `<section class="document-group">
+    <h3>${escapeHtml(label)}</h3>
+    <div class="document-list">
+      ${files.map((file) => `<a class="document-link" href="${API_BASE}/candidates/${approval.candidate.id}/documents/${file.id}/download" target="_blank">
+        <span>${escapeHtml(file.fileName)}</span>
+        <small>${formatFileSize(file.fileSize)} · ${formatDate(file.uploadedAt)}</small>
+      </a>`).join("")}
+    </div>
+  </section>`).join("");
+}
+
+function documentTypeLabel(type) {
+  return {
+    resume: "Резюме",
+    candidate_questionnaire: "Анкета кандидата",
+    security_questionnaire: "Анкета СБ",
+    credit_bureau_report: "Полный отчет кредитного бюро",
+    additional_files: "Дополнительные файлы",
+  }[type] || "Файл";
 }
 
 async function openDecision(id, decision) {
@@ -170,6 +231,13 @@ function formatDate(value) {
     : "—";
 }
 
+function formatFileSize(value) {
+  const size = Number(value || 0);
+  if (!size) return "0 Б";
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} КБ`;
+  return `${(size / 1024 / 1024).toFixed(1)} МБ`;
+}
+
 function escapeHtml(value = "") {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -192,6 +260,8 @@ function init() {
   $("#decisionForm").addEventListener("submit", submitDecision);
   $("#closeDialog").addEventListener("click", closeDecision);
   $("#cancelDecision").addEventListener("click", closeDecision);
+  $("#closeDocuments").addEventListener("click", () => $("#documentsDialog").close());
+  $("#closeDocumentsFooter").addEventListener("click", () => $("#documentsDialog").close());
   window.addEventListener("focus", loadApprovals);
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) loadApprovals();
