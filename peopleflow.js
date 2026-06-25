@@ -605,6 +605,7 @@ function renderCandidates() {
   $$(".delete-candidate").forEach((button) => button.addEventListener("click", () => deleteCandidate(button.dataset.id)));
   $$(".request-approval").forEach((button) => button.addEventListener("click", () => requestApproval(button.dataset.id, button.dataset.type)));
   $$(".assign-and-request").forEach((button) => button.addEventListener("click", () => assignCandidateAndRequest(button.dataset.id)));
+  $$(".workflow-stage-select").forEach((select) => select.addEventListener("change", () => moveApplicationStage(select.dataset.id, select.value)));
 }
 
 function matchesCandidateApproval(candidate, filter) {
@@ -674,13 +675,21 @@ function applicationWorkflowRow(application) {
   const hasSecurityPackage = candidateDocumentRequirements
     .filter((item) => item.required)
     .every((item) => documents.has(item.type));
-  const canSendCustomer = canRequestApproval() && (!customer || customer.status === "rejected");
-  const canSendSecurity = canRequestApproval() && customer?.status === "approved" && (!security || security.status === "rejected");
+  const canManageWorkflow = canRequestApproval();
+  const canSendCustomer = canManageWorkflow && (!customer || customer.status === "rejected");
+  const canSendSecurity = canManageWorkflow && customer?.status === "approved" && security?.status !== "pending";
+  const securityButtonLabel = security ? "Повторно в СБ" : "В СБ";
+  const stageControl = canManageWorkflow
+    ? `<select class="workflow-stage-select" data-id="${application.id}">
+        ${getStageOptions().map((stage) => `<option value="${stage.code}" ${application.stage?.code === stage.code ? "selected" : ""}>${stage.name}</option>`).join("")}
+      </select>`
+    : "";
   return `<div class="record-workflow-actions">
     <span class="workflow-vacancy">${application.vacancy.title}</span>
     <span class="badge ${status.className}">${status.label}</span>
+    ${stageControl}
     ${canSendCustomer ? `<button class="workflow-button request-approval" data-id="${application.id}" data-type="customer" ${hasResume ? "" : "disabled"}>${hasResume ? "Заказчику" : "Нужно резюме"}</button>` : ""}
-    ${canSendSecurity ? `<button class="workflow-button request-approval" data-id="${application.id}" data-type="security" ${hasSecurityPackage ? "" : "disabled"}>${hasSecurityPackage ? "В СБ" : "Нужны документы СБ"}</button>` : ""}
+    ${canSendSecurity ? `<button class="workflow-button request-approval" data-id="${application.id}" data-type="security" ${hasSecurityPackage ? "" : "disabled"}>${hasSecurityPackage ? securityButtonLabel : "Нужны документы СБ"}</button>` : ""}
   </div>`;
 }
 
@@ -899,6 +908,28 @@ async function requestApproval(applicationId, type) {
     switchView("approvals");
   } catch (error) {
     alert(`Не удалось отправить на согласование: ${error.message}`);
+  }
+}
+
+async function moveApplicationStage(applicationId, stageCode) {
+  if (!state.apiConnected) {
+    alert("Для изменения статуса должен быть запущен backend.");
+    return;
+  }
+  const stage = getStageOptions().find((item) => item.code === stageCode);
+  try {
+    await apiFetch(`/applications/${applicationId}/move`, {
+      method: "POST",
+      body: JSON.stringify({
+        stageCode,
+        changedBy: currentUserId(),
+        comment: `Рекрутер изменил этап: ${stage?.name || stageCode}`,
+      }),
+    });
+    await refreshFromApi();
+  } catch (error) {
+    alert(`Не удалось изменить статус: ${error.message}`);
+    await refreshFromApi();
   }
 }
 

@@ -294,6 +294,12 @@ textarea { min-height: 86px; resize: vertical; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.workflow-stage-select {
+  width: min(230px, 100%);
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
 .dashboard-approvals {
   margin-top: 16px;
 }
