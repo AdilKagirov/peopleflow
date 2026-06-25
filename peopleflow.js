@@ -1248,16 +1248,16 @@ async function candidateForm(id) {
   bindCandidateDocumentControls(id);
 }
 
-function interviewForm(id) {
+function interviewForm(interviewId) {
   if (state.apiConnected && !state.applications?.length) {
     alert("Сначала привяжите кандидата к вакансии.");
     return;
   }
-  const item = (state.interviews || []).find((interview) => interview.id === id);
+  const item = (state.interviews || []).find((interview) => interview.id === interviewId);
   const interviewOptions = state.apiConnected
     ? state.applications.map((item) => `${item.id}|${item.candidate.name} — ${item.vacancy.title}`)
     : state.candidates.map((item) => `${item.id}|${item.name} — ${item.vacancyTitle}`);
-  openModal(id ? "Перенести интервью" : "Запланировать интервью", [
+  openModal(interviewId ? "Перенести интервью" : "Запланировать интервью", [
     selectField(
       "applicationId",
       "Кандидат и вакансия",
@@ -1278,8 +1278,8 @@ function interviewForm(id) {
     if (state.apiConnected) {
       const [applicationId] = data.applicationId.split("|");
       const [interviewTypeCode] = data.interviewTypeCode.split("|");
-      await apiFetch(id ? `/interviews/${id}` : "/interviews", {
-        method: id ? "PATCH" : "POST",
+      await apiFetch(interviewId ? `/interviews/${interviewId}` : "/interviews", {
+        method: interviewId ? "PATCH" : "POST",
         body: JSON.stringify({
           applicationId,
           interviewTypeCode,
@@ -1294,8 +1294,8 @@ function interviewForm(id) {
       return;
     }
 
-    const [id] = data.applicationId.split("|");
-    const candidate = state.candidates.find((item) => item.id === id);
+    const [candidateId] = data.applicationId.split("|");
+    const candidate = state.candidates.find((item) => item.id === candidateId);
     candidate.interviewAt = data.startsAt;
     candidate.history += `; интервью ${formatDateTime(data.startsAt)} ${data.location}`;
     saveState();
