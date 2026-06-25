@@ -520,20 +520,26 @@ function renderDashboard() {
   $("#upcomingInterviews").innerHTML = interviews
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
     .map((item) => `<article class="list-item dashboard-action-item">
-      <button type="button" class="link-card open-candidate-profile" data-id="${item.candidate.id}">
+      <div class="dashboard-row-main">
         <strong>${item.candidate.name}</strong>
         <p class="muted">${formatDateTime(item.startsAt)} · ${item.vacancy.title}</p>
-      </button>
-      <button type="button" class="ghost reschedule-interview" data-id="${item.id}">Перенести</button>
+      </div>
+      <div class="dashboard-row-actions">
+        <button type="button" class="ghost open-candidate-profile" data-id="${item.candidate.id}">Профиль</button>
+        <button type="button" class="ghost reschedule-interview" data-id="${item.id}">Перенести</button>
+      </div>
     </article>`)
     .join("") || empty("Интервью не запланированы");
   $("#pendingApprovals").innerHTML = pendingApprovals
     .map((item) => `<article class="list-item approval-dashboard-item">
-      <button type="button" class="link-card open-candidate-profile" data-id="${item.candidate.id}">
+      <div class="dashboard-row-main">
         <strong>${item.candidate.name}</strong>
         <p class="muted">${item.vacancy.title} · ${approvalStatusLabel(item)}</p>
-      </button>
-      <span class="badge pause">${item.type === "customer" ? "Заказчик" : "СБ"}</span>
+      </div>
+      <div class="dashboard-row-actions">
+        <span class="badge pause">${item.type === "customer" ? "Заказчик" : "СБ"}</span>
+        <button type="button" class="ghost open-candidate-profile" data-id="${item.candidate.id}">Профиль</button>
+      </div>
     </article>`)
     .join("") || empty("Нет кандидатов, ожидающих согласования");
   $$(".open-candidate-profile").forEach((button) => {

@@ -362,21 +362,27 @@ textarea { min-height: 86px; resize: vertical; }
   justify-content: space-between;
   gap: 12px;
 }
-.link-card {
+.dashboard-row-main {
   min-width: 0;
-  padding: 0;
-  color: inherit;
-  background: transparent;
-  text-align: left;
+  display: grid;
+  gap: 3px;
 }
-.link-card strong,
-.link-card p {
+.dashboard-row-main strong,
+.dashboard-row-main p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.link-card:hover strong {
-  color: var(--primary);
+.dashboard-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.dashboard-row-actions .ghost {
+  min-height: 34px;
+  padding: 0 10px;
 }
 .badge, .tag { border-radius: 999px; padding: 4px 8px; font-size: 12px; background: #eef3f8; }
 .badge.open { color: var(--green); background: #e8f6ee; }
