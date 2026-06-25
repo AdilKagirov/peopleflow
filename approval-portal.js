@@ -253,6 +253,7 @@ function escapeHtml(value = "") {
 
 function init() {
   document.title = `KMF PeopleFlow · ${labels.queue}`;
+  ensureDocumentsDialog();
   $$(".segment").forEach((button) => {
     button.addEventListener("click", () => {
       activeStatus = button.dataset.status;
@@ -274,6 +275,27 @@ function init() {
     if (!document.hidden && !$("#decisionDialog").open) loadApprovals();
   }, 15000);
   loadApprovals();
+}
+
+function ensureDocumentsDialog() {
+  if ($("#documentsDialog")) return;
+  document.body.insertAdjacentHTML("beforeend", `
+    <dialog id="documentsDialog">
+      <div class="documents-modal">
+        <div class="dialog-head">
+          <div>
+            <p class="eyebrow">Файлы кандидата</p>
+            <h2 id="documentsCandidate"></h2>
+          </div>
+          <button type="button" class="icon-button" id="closeDocuments" aria-label="Закрыть">×</button>
+        </div>
+        <div id="documentsBody" class="documents-body"></div>
+        <div class="dialog-actions">
+          <button type="button" class="secondary" id="closeDocumentsFooter">Закрыть</button>
+        </div>
+      </div>
+    </dialog>
+  `);
 }
 
 init();
